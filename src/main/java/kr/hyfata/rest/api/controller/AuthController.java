@@ -101,7 +101,8 @@ public class AuthController {
     public ResponseEntity<Map<String, String>> requestPasswordReset(@RequestBody Map<String, String> request) {
         try {
             String email = request.get("email");
-            authService.requestPasswordReset(email);
+            String clientId = request.getOrDefault("clientId", "default");
+            authService.requestPasswordReset(email, clientId);
             Map<String, String> response = new HashMap<>();
             response.put("message", "Password reset link has been sent to your email");
             return ResponseEntity.ok(response);

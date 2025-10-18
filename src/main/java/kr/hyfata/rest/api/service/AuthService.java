@@ -26,7 +26,7 @@ public interface AuthService {
     /**
      * 비밀번호 재설정 요청
      */
-    void requestPasswordReset(String email);
+    void requestPasswordReset(String email, String clientId);
 
     /**
      * 비밀번호 재설정

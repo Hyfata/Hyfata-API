@@ -12,4 +12,6 @@ import lombok.NoArgsConstructor;
 public class AuthRequest {
     private String email;
     private String password;
+    @Builder.Default
+    private String clientId = "default";  // OAuth 클라이언트 ID (기본값: default)
 }

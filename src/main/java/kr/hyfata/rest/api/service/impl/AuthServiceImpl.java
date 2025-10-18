@@ -4,6 +4,7 @@ import kr.hyfata.rest.api.dto.*;
 import kr.hyfata.rest.api.entity.User;
 import kr.hyfata.rest.api.repository.UserRepository;
 import kr.hyfata.rest.api.service.AuthService;
+import kr.hyfata.rest.api.service.ClientService;
 import kr.hyfata.rest.api.service.EmailService;
 import kr.hyfata.rest.api.util.JwtUtil;
 import kr.hyfata.rest.api.util.TokenGenerator;
@@ -26,6 +27,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtUtil jwtUtil;
     private final TokenGenerator tokenGenerator;
     private final EmailService emailService;
+    private final ClientService clientService;
 
     @Value("${jwt.expiration:86400000}")
     private long jwtExpiration;
@@ -38,6 +40,11 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void register(RegisterRequest request) {
+        // 클라이언트 검증
+        if (!clientService.validateClient(request.getClientId()).isPresent()) {
+            throw new BadCredentialsException("Invalid or disabled client");
+        }
+
         // 입력 검증
         if (!request.getPassword().equals(request.getConfirmPassword())) {
             throw new BadCredentialsException("Passwords do not match");
@@ -66,13 +73,18 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
 
         // 이메일 검증 링크 발송
-        emailService.sendEmailVerificationEmail(user.getEmail(), user.getEmailVerificationToken());
+        emailService.sendEmailVerificationEmail(user.getEmail(), user.getEmailVerificationToken(), request.getClientId());
 
-        log.info("User registered: {}", user.getEmail());
+        log.info("User registered: {} (client: {})", user.getEmail(), request.getClientId());
     }
 
     @Override
     public AuthResponse login(AuthRequest request) {
+        // 클라이언트 검증
+        if (!clientService.validateClient(request.getClientId()).isPresent()) {
+            throw new BadCredentialsException("Invalid or disabled client");
+        }
+
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
 
@@ -91,7 +103,7 @@ public class AuthServiceImpl implements AuthService {
             user.setTwoFactorCodeExpiredAt(LocalDateTime.now().plusMinutes(twoFactorExpirationMinutes));
             userRepository.save(user);
 
-            emailService.sendTwoFactorEmail(user.getEmail(), twoFactorCode);
+            emailService.sendTwoFactorEmail(user.getEmail(), twoFactorCode, request.getClientId());
 
             return AuthResponse.twoFactorRequired("Please check your email for the 2FA code");
         }
@@ -100,7 +112,7 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtUtil.generateAccessToken(user);
         String refreshToken = jwtUtil.generateRefreshToken(user);
 
-        log.info("User logged in: {}", user.getEmail());
+        log.info("User logged in: {} (client: {})", user.getEmail(), request.getClientId());
 
         return AuthResponse.success(accessToken, refreshToken, jwtExpiration);
     }
@@ -149,7 +161,12 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public void requestPasswordReset(String email) {
+    public void requestPasswordReset(String email, String clientId) {
+        // 클라이언트 검증
+        if (!clientService.validateClient(clientId).isPresent()) {
+            throw new BadCredentialsException("Invalid or disabled client");
+        }
+
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new BadCredentialsException("User not found"));
 
@@ -158,9 +175,9 @@ public class AuthServiceImpl implements AuthService {
         user.setResetPasswordTokenExpiredAt(LocalDateTime.now().plusHours(resetTokenExpirationHours));
         userRepository.save(user);
 
-        emailService.sendPasswordResetEmail(user.getEmail(), resetToken);
+        emailService.sendPasswordResetEmail(user.getEmail(), resetToken, clientId);
 
-        log.info("Password reset requested for: {}", email);
+        log.info("Password reset requested for: {} (client: {})", email, clientId);
     }
 
     @Override

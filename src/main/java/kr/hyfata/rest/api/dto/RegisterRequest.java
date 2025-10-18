@@ -16,4 +16,6 @@ public class RegisterRequest {
     private String confirmPassword;
     private String firstName;
     private String lastName;
+    @Builder.Default
+    private String clientId = "default";  // OAuth 클라이언트 ID (기본값: default)
 }
