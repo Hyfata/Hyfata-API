@@ -41,7 +41,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void register(RegisterRequest request) {
         // 클라이언트 검증
-        if (!clientService.validateClient(request.getClientId()).isPresent()) {
+        if (clientService.validateClient(request.getClientId()).isEmpty()) {
             throw new BadCredentialsException("Invalid or disabled client");
         }
 
@@ -81,7 +81,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public AuthResponse login(AuthRequest request) {
         // 클라이언트 검증
-        if (!clientService.validateClient(request.getClientId()).isPresent()) {
+        if (clientService.validateClient(request.getClientId()).isEmpty()) {
             throw new BadCredentialsException("Invalid or disabled client");
         }
 
@@ -163,7 +163,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void requestPasswordReset(String email, String clientId) {
         // 클라이언트 검증
-        if (!clientService.validateClient(clientId).isPresent()) {
+        if (clientService.validateClient(clientId).isEmpty()) {
             throw new BadCredentialsException("Invalid or disabled client");
         }
 

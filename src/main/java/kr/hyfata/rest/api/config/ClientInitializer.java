@@ -23,7 +23,7 @@ public class ClientInitializer implements CommandLineRunner {
     private String defaultFrontendUrl;
 
     @Override
-    public void run(String... args) throws Exception {
+    public void run(String... args) {
         try {
             // 기본 클라이언트 확인
             if (!clientRepository.existsByClientId("default")) {

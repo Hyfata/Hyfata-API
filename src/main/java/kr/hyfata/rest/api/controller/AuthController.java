@@ -21,11 +21,18 @@ public class AuthController {
     private final AuthService authService;
 
     /**
-     * 회원가입
+     * 회원가입 (레거시 - OAuth 2.0 대신 /oauth 엔드포인트 사용 권장)
      * POST /api/auth/register
+     *
+     * ⚠️ DEPRECATED: 이 엔드포인트는 레거시 API입니다.
+     * OAuth 2.0 Authorization Code Flow를 사용하세요:
+     * 1. GET /oauth/authorize
+     * 2. POST /oauth/login
+     * 3. POST /oauth/token
      */
     @PostMapping("/register")
     public ResponseEntity<Map<String, String>> register(@RequestBody RegisterRequest request) {
+        log.warn("⚠️ DEPRECATED: Direct /api/auth/register is called. Please use OAuth 2.0 flow instead (GET /oauth/authorize)");
         try {
             authService.register(request);
             Map<String, String> response = new HashMap<>();
@@ -40,11 +47,15 @@ public class AuthController {
     }
 
     /**
-     * 로그인
+     * 로그인 (레거시 - OAuth 2.0 대신 /oauth 엔드포인트 사용 권장)
      * POST /api/auth/login
+     *
+     * ⚠️ DEPRECATED: 이 엔드포인트는 레거시 API입니다.
+     * OAuth 2.0 Authorization Code Flow를 사용하세요.
      */
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@RequestBody AuthRequest request) {
+        log.warn("⚠️ DEPRECATED: Direct /api/auth/login is called. Please use OAuth 2.0 flow instead (GET /oauth/authorize)");
         try {
             AuthResponse response = authService.login(request);
             return ResponseEntity.ok(response);
