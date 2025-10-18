@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth Login - Hyfata</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 400px;
+            padding: 40px;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header h1 {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .login-header p {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .client-info {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 24px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .client-info strong {
+            color: #333;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="email"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group input[type="hidden"] {
+            display: none;
+        }
+
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 8px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            border-left: 4px solid #c33;
+        }
+
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            border-left: 4px solid #ffc107;
+        }
+
+        .security-notice {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>Hyfata OAuth</h1>
+            <p>Sign in to continue</p>
+        </div>
+
+        <!-- 클라이언트 정보 표시 -->
+        <div class="client-info">
+            <strong>Connecting to:</strong><br>
+            <span th:text="${client_id}"></span>
+        </div>
+
+        <!-- 에러 메시지 -->
+        <div th:if="${error}" class="error-message" th:text="${error}"></div>
+
+        <!-- 경고: 이것은 데모용 간단한 로그인 -->
+        <div class="warning">
+            ⚠️ This is a simplified login form for demonstration. In production, use proper password verification.
+        </div>
+
+        <!-- 로그인 폼 -->
+        <form method="POST" action="/oauth/login">
+            <input type="hidden" name="client_id" th:value="${client_id}">
+            <input type="hidden" name="redirect_uri" th:value="${redirect_uri}">
+            <input type="hidden" name="state" th:value="${state}">
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    th:value="${email}"
+                    required
+                    autofocus
+                    placeholder="user@example.com"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    required
+                    placeholder="Enter your password"
+                >
+            </div>
+
+            <button type="submit" class="submit-btn">Sign In</button>
+        </form>
+
+        <div class="security-notice">
+            🔒 This connection is secure. Your credentials are encrypted.
+        </div>
+    </div>
+</body>
+</html>
