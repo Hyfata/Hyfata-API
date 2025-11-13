@@ -41,6 +41,7 @@ public class SecurityConfig {
                         // 공개 엔드포인트
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
+                        .requestMatchers("/oauth/**").permitAll()
                         .requestMatchers("/").permitAll()
                         .requestMatchers("/health").permitAll()
                         // Swagger/OpenAPI 관련 엔드포인트 (필요시 추가)
