@@ -1,0 +1,468 @@
+{
+  "info": {
+    "_postman_id": "oauth2-pkce-testing",
+    "name": "OAuth 2.0 + PKCE Testing",
+    "description": "Complete OAuth 2.0 Authorization Code Flow with PKCE (RFC 7636) testing for Hyfata REST API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Generate Code Challenge",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Generate random code_verifier (128 characters - RFC 7636)",
+              "const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';",
+              "let codeVerifier = '';",
+              "for (let i = 0; i < 128; i++) {",
+              "  codeVerifier += chars.charAt(Math.floor(Math.random() * chars.length));",
+              "}",
+              "",
+              "// Generate code_challenge using SHA-256 + Base64URL encoding",
+              "const hash = CryptoJS.SHA256(codeVerifier);",
+              "const codeChallenge = CryptoJS.enc.Base64.stringify(hash)",
+              "  .replace(/\\+/g, '-')",
+              "  .replace(/\\//g, '_')",
+              "  .replace(/=/g, '');",
+              "",
+              "// Generate random state",
+              "const state = pm.variables.replaceIn('{{$randomUUID}}');",
+              "",
+              "// Set collection variables",
+              "pm.variables.set('code_verifier', codeVerifier);",
+              "pm.variables.set('code_challenge', codeChallenge);",
+              "pm.variables.set('state', state);",
+              "",
+              "console.log('✅ PKCE Values Generated');",
+              "console.log('Code Verifier (first 20 chars): ' + codeVerifier.substring(0, 20) + '...');",
+              "console.log('Code Challenge: ' + codeChallenge);",
+              "console.log('State: ' + state);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080"
+        },
+        "description": "🔧 Pre-request script only - generates PKCE code_verifier and code_challenge\n\nRun this first! No actual HTTP request is sent.\nGenerated values are stored in collection variables."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Authorization Request (with PKCE)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/oauth/authorize?client_id={{client_id}}&redirect_uri={{redirect_uri}}&response_type=code&state={{state}}&code_challenge={{code_challenge}}&code_challenge_method=S256",
+          "protocol": "http",
+          "host": ["{{base_url}}"],
+          "path": ["oauth", "authorize"],
+          "query": [
+            {
+              "key": "client_id",
+              "value": "{{client_id}}"
+            },
+            {
+              "key": "redirect_uri",
+              "value": "{{redirect_uri}}"
+            },
+            {
+              "key": "response_type",
+              "value": "code"
+            },
+            {
+              "key": "state",
+              "value": "{{state}}"
+            },
+            {
+              "key": "code_challenge",
+              "value": "{{code_challenge}}"
+            },
+            {
+              "key": "code_challenge_method",
+              "value": "S256"
+            }
+          ]
+        },
+        "description": "Step 2️⃣: Authorization Request with PKCE\n\nDisplays login page. Check:\n✓ Response is HTML login form\n✓ code_challenge in hidden fields\n✓ All parameters pre-filled"
+      },
+      "response": []
+    },
+    {
+      "name": "3. Login & Get Authorization Code",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Extract authorization code from Location header (302 redirect)",
+              "const location = pm.response.headers.get('Location');",
+              "console.log('📍 Redirect Location: ' + location);",
+              "",
+              "if (location) {",
+              "  try {",
+              "    const url = new URL(location);",
+              "    const authCode = url.searchParams.get('code');",
+              "    const returnedState = url.searchParams.get('state');",
+              "    ",
+              "    pm.variables.set('authorization_code', authCode);",
+              "    ",
+              "    pm.test('✅ Status is 302 (redirect)', function() {",
+              "      pm.expect(pm.response.code).to.equal(302);",
+              "    });",
+              "    ",
+              "    pm.test('✅ Authorization Code received', function() {",
+              "      pm.expect(authCode).to.exist;",
+              "      pm.expect(authCode).to.not.be.empty;",
+              "    });",
+              "    ",
+              "    pm.test('✅ State parameter matches', function() {",
+              "      pm.expect(returnedState).to.equal(pm.variables.get('state'));",
+              "    });",
+              "    ",
+              "    console.log('✅ Authorization Code: ' + authCode.substring(0, 20) + '...');",
+              "  } catch (e) {",
+              "    console.error('⚠️ Error parsing redirect URL');",
+              "  }",
+              "} else {",
+              "  console.warn('⚠️ No Location header found');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "email",
+              "value": "{{email}}"
+            },
+            {
+              "key": "password",
+              "value": "{{password}}"
+            },
+            {
+              "key": "client_id",
+              "value": "{{client_id}}"
+            },
+            {
+              "key": "redirect_uri",
+              "value": "{{redirect_uri}}"
+            },
+            {
+              "key": "state",
+              "value": "{{state}}"
+            },
+            {
+              "key": "code_challenge",
+              "value": "{{code_challenge}}"
+            },
+            {
+              "key": "code_challenge_method",
+              "value": "S256"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/oauth/login",
+          "protocol": "http",
+          "host": ["{{base_url}}"],
+          "path": ["oauth", "login"]
+        },
+        "description": "Step 3️⃣: Login & Get Authorization Code\n\nPOST credentials with PKCE parameters.\n\nCheck:\n✓ Status: 302 redirect\n✓ Location header contains authorization code\n✓ Authorization code stored in variable\n✓ State parameter matches"
+      },
+      "response": []
+    },
+    {
+      "name": "4. Token Exchange (with PKCE Verification)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('✅ Status code is 200', function() {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('✅ Response contains tokens', function() {",
+              "  const response = pm.response.json();",
+              "  pm.expect(response).to.have.property('access_token');",
+              "  pm.expect(response).to.have.property('refresh_token');",
+              "  pm.expect(response).to.have.property('token_type');",
+              "  pm.expect(response.token_type).to.equal('Bearer');",
+              "});",
+              "",
+              "// Store tokens for later use",
+              "const response = pm.response.json();",
+              "pm.variables.set('access_token', response.access_token);",
+              "pm.variables.set('refresh_token', response.refresh_token);",
+              "",
+              "console.log('✅ PKCE Flow Completed Successfully!');",
+              "console.log('Access Token (first 30 chars): ' + response.access_token.substring(0, 30) + '...');",
+              "console.log('Token Type: ' + response.token_type);",
+              "console.log('Expires In: ' + response.expires_in + 'ms (24 hours)');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "authorization_code"
+            },
+            {
+              "key": "code",
+              "value": "{{authorization_code}}"
+            },
+            {
+              "key": "client_id",
+              "value": "{{client_id}}"
+            },
+            {
+              "key": "client_secret",
+              "value": "{{client_secret}}"
+            },
+            {
+              "key": "redirect_uri",
+              "value": "{{redirect_uri}}"
+            },
+            {
+              "key": "code_verifier",
+              "value": "{{code_verifier}}",
+              "description": "PKCE: Must match the code_challenge from Step 2"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/oauth/token",
+          "protocol": "http",
+          "host": ["{{base_url}}"],
+          "path": ["oauth", "token"]
+        },
+        "description": "Step 4️⃣: Token Exchange with PKCE Verification\n\nExchange authorization_code for access & refresh tokens.\n⚠️ CRITICAL: code_verifier must match code_challenge from Step 2\n\nCheck:\n✓ Status: 200 OK\n✓ Response has access_token & refresh_token\n✓ token_type: Bearer\n✓ Tokens stored in variables"
+      },
+      "response": []
+    },
+    {
+      "name": "5. Test: Invalid code_verifier",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('❌ Status code is 400 (PKCE verification failed)', function() {",
+              "  pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test('❌ Error is invalid_grant', function() {",
+              "  const response = pm.response.json();",
+              "  pm.expect(response.error).to.equal('invalid_grant');",
+              "  console.log('Error: ' + response.error_description);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "authorization_code"
+            },
+            {
+              "key": "code",
+              "value": "{{authorization_code}}"
+            },
+            {
+              "key": "client_id",
+              "value": "{{client_id}}"
+            },
+            {
+              "key": "client_secret",
+              "value": "{{client_secret}}"
+            },
+            {
+              "key": "redirect_uri",
+              "value": "{{redirect_uri}}"
+            },
+            {
+              "key": "code_verifier",
+              "value": "WRONG_CODE_VERIFIER_THAT_DOES_NOT_MATCH_CHALLENGE"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/oauth/token",
+          "protocol": "http",
+          "host": ["{{base_url}}"],
+          "path": ["oauth", "token"]
+        },
+        "description": "🧪 ERROR TEST: Invalid code_verifier\n\nTry token exchange with wrong code_verifier.\n\nExpected:\n❌ Status: 400 Bad Request\n❌ Error: invalid_grant\n❌ Reason: PKCE verification failed"
+      },
+      "response": []
+    },
+    {
+      "name": "6. Test: Missing code_verifier",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('❌ Status code is 400 (missing code_verifier)', function() {",
+              "  pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test('❌ Error indicates code_verifier required', function() {",
+              "  const response = pm.response.json();",
+              "  pm.expect(response.error).to.equal('invalid_grant');",
+              "  pm.expect(response.error_description).to.include('code_verifier');",
+              "  console.log('Error: ' + response.error_description);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "authorization_code"
+            },
+            {
+              "key": "code",
+              "value": "{{authorization_code}}"
+            },
+            {
+              "key": "client_id",
+              "value": "{{client_id}}"
+            },
+            {
+              "key": "client_secret",
+              "value": "{{client_secret}}"
+            },
+            {
+              "key": "redirect_uri",
+              "value": "{{redirect_uri}}"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/oauth/token",
+          "protocol": "http",
+          "host": ["{{base_url}}"],
+          "path": ["oauth", "token"]
+        },
+        "description": "🧪 ERROR TEST: Missing code_verifier\n\nTry token exchange without code_verifier (code_challenge was provided in Step 2).\n\nExpected:\n❌ Status: 400 Bad Request\n❌ Error: invalid_grant\n❌ Reason: code_verifier is required"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "client_id",
+      "value": "test-client-001",
+      "type": "string"
+    },
+    {
+      "key": "client_secret",
+      "value": "test-secret-001",
+      "type": "string"
+    },
+    {
+      "key": "redirect_uri",
+      "value": "http://localhost:3000/callback",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "oauth-test@example.com",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "TestPassword123!",
+      "type": "string"
+    },
+    {
+      "key": "code_verifier",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "code_challenge",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "state",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authorization_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

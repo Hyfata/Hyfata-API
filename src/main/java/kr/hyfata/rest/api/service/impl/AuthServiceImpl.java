@@ -45,11 +45,6 @@ public class AuthServiceImpl implements AuthService {
             throw new BadCredentialsException("Invalid or disabled client");
         }
 
-        // 입력 검증
-        if (!request.getPassword().equals(request.getConfirmPassword())) {
-            throw new BadCredentialsException("Passwords do not match");
-        }
-
         // 중복 확인
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new BadCredentialsException("Email already registered");
