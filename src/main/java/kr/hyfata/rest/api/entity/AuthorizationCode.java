@@ -39,6 +39,12 @@ public class AuthorizationCode {
     @Column(length = 255)
     private String state;  // CSRF 방지용
 
+    @Column(length = 500)
+    private String codeChallenge;  // PKCE code challenge (SHA-256 해시 후 Base64URL 인코딩)
+
+    @Column(length = 50)
+    private String codeChallengeMethod;  // PKCE method (S256 or plain)
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean used = false;  // 한 번만 사용 가능

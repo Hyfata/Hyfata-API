@@ -36,14 +36,23 @@ public class OAuthController {
 
     /**
      * 1단계: Authorization 요청
-     * GET /oauth/authorize?client_id=xxx&redirect_uri=xxx&state=xxx&response_type=code
+     * GET /oauth/authorize?client_id=xxx&redirect_uri=xxx&state=xxx&response_type=code&code_challenge=xxx&code_challenge_method=xxx
      *
-     * 예시:
+     * 예시 (PKCE 없음):
      * https://api.hyfata.com/oauth/authorize?
      *   client_id=client_001&
      *   redirect_uri=https://site1.com/callback&
      *   state=random_state_123&
      *   response_type=code
+     *
+     * 예시 (PKCE 포함 - Flutter 앱):
+     * https://api.hyfata.com/oauth/authorize?
+     *   client_id=client_001&
+     *   redirect_uri=https://site1.com/callback&
+     *   state=random_state_123&
+     *   response_type=code&
+     *   code_challenge=E9Mrozoa2owUzA7VLHwAIAKllCOvtQyen8P0xWXomaQ&
+     *   code_challenge_method=S256
      */
     @GetMapping("/authorize")
     public String authorize(
@@ -51,6 +60,8 @@ public class OAuthController {
             @RequestParam String redirect_uri,
             @RequestParam(required = false) String state,
             @RequestParam(defaultValue = "code") String response_type,
+            @RequestParam(required = false) String code_challenge,
+            @RequestParam(required = false) String code_challenge_method,
             Model model) {
 
         try {
@@ -82,7 +93,15 @@ public class OAuthController {
             model.addAttribute("redirect_uri", redirect_uri);
             model.addAttribute("state", state);
 
-            log.info("Authorization request: client_id={}, redirect_uri={}", client_id, redirect_uri);
+            // PKCE 파라미터 전달
+            if (code_challenge != null && !code_challenge.isEmpty()) {
+                model.addAttribute("code_challenge", code_challenge);
+                model.addAttribute("code_challenge_method", code_challenge_method != null ? code_challenge_method : "S256");
+                log.info("Authorization request with PKCE: client_id={}, method={}", client_id, code_challenge_method);
+            } else {
+                log.info("Authorization request: client_id={}, redirect_uri={}", client_id, redirect_uri);
+            }
+
             return "oauth/login";  // Thymeleaf 템플릿
 
         } catch (Exception e) {
@@ -96,13 +115,24 @@ public class OAuthController {
      * 2단계: 로그인 처리 및 Authorization Code 생성
      * POST /oauth/login
      *
-     * 요청:
+     * 요청 (PKCE 없음):
      * {
      *   "email": "user@example.com",
      *   "password": "password123",
      *   "client_id": "client_001",
      *   "redirect_uri": "https://site1.com/callback",
      *   "state": "random_state_123"
+     * }
+     *
+     * 요청 (PKCE 포함):
+     * {
+     *   "email": "user@example.com",
+     *   "password": "password123",
+     *   "client_id": "client_001",
+     *   "redirect_uri": "https://site1.com/callback",
+     *   "state": "random_state_123",
+     *   "code_challenge": "E9Mrozoa2owUzA7VLHwAIAKllCOvtQyen8P0xWXomaQ",
+     *   "code_challenge_method": "S256"
      * }
      */
     @PostMapping("/login")
@@ -112,6 +142,8 @@ public class OAuthController {
             @RequestParam String client_id,
             @RequestParam String redirect_uri,
             @RequestParam String state,
+            @RequestParam(required = false) String code_challenge,
+            @RequestParam(required = false) String code_challenge_method,
             Model model) {
 
         try {
@@ -134,8 +166,16 @@ public class OAuthController {
                 throw new Exception("Email verification required");
             }
 
-            // 5. Authorization Code 생성
-            String authCode = oAuthService.generateAuthorizationCode(client_id, email, redirect_uri, state);
+            // 5. Authorization Code 생성 (PKCE 파라미터 포함)
+            String authCode;
+            if (code_challenge != null && !code_challenge.isEmpty()) {
+                authCode = oAuthService.generateAuthorizationCode(client_id, email, redirect_uri, state,
+                                                                    code_challenge, code_challenge_method);
+                log.info("Authorization code generated with PKCE: email={}, client_id={}", email, client_id);
+            } else {
+                authCode = oAuthService.generateAuthorizationCode(client_id, email, redirect_uri, state);
+                log.info("Authorization code generated: email={}, client_id={}", email, client_id);
+            }
 
             // 6. 리다이렉트 URL 구성: redirect_uri?code=xxx&state=xxx
             String redirectUrl = redirect_uri + "?code=" + authCode + "&state=" + state;
@@ -150,6 +190,8 @@ public class OAuthController {
             model.addAttribute("client_id", client_id);
             model.addAttribute("redirect_uri", redirect_uri);
             model.addAttribute("state", state);
+            model.addAttribute("code_challenge", code_challenge);
+            model.addAttribute("code_challenge_method", code_challenge_method);
             return "oauth/login";
         }
     }
@@ -158,12 +200,20 @@ public class OAuthController {
      * 3단계: Authorization Code를 Token으로 교환
      * POST /oauth/token
      *
-     * 요청 (application/x-www-form-urlencoded):
+     * 요청 (PKCE 없음, application/x-www-form-urlencoded):
      * grant_type=authorization_code&
      * code=xxx&
      * client_id=client_001&
      * client_secret=secret_001&
      * redirect_uri=https://site1.com/callback
+     *
+     * 요청 (PKCE 포함, application/x-www-form-urlencoded):
+     * grant_type=authorization_code&
+     * code=xxx&
+     * client_id=client_001&
+     * client_secret=secret_001&
+     * redirect_uri=https://site1.com/callback&
+     * code_verifier=xxxxxx...
      *
      * 응답:
      * {
@@ -181,7 +231,8 @@ public class OAuthController {
             @RequestParam(required = false) String code,
             @RequestParam String client_id,
             @RequestParam String client_secret,
-            @RequestParam String redirect_uri) {
+            @RequestParam String redirect_uri,
+            @RequestParam(required = false) String code_verifier) {
 
         try {
             // grant_type 검증
@@ -194,9 +245,17 @@ public class OAuthController {
                 throw new BadCredentialsException("Authorization code is required");
             }
 
-            // Authorization Code를 Token으로 교환
-            OAuthTokenResponse tokenResponse = oAuthService.exchangeCodeForToken(
-                    code, client_id, client_secret, redirect_uri);
+            // Authorization Code를 Token으로 교환 (PKCE code_verifier 포함)
+            OAuthTokenResponse tokenResponse;
+            if (code_verifier != null && !code_verifier.isEmpty()) {
+                tokenResponse = oAuthService.exchangeCodeForToken(
+                        code, client_id, client_secret, redirect_uri, code_verifier);
+                log.info("Token issued with PKCE: client_id={}", client_id);
+            } else {
+                tokenResponse = oAuthService.exchangeCodeForToken(
+                        code, client_id, client_secret, redirect_uri);
+                log.info("Token issued: client_id={}", client_id);
+            }
 
             Map<String, Object> response = new HashMap<>();
             response.put("access_token", tokenResponse.getAccessToken());
@@ -205,7 +264,6 @@ public class OAuthController {
             response.put("expires_in", tokenResponse.getExpiresIn());
             response.put("scope", tokenResponse.getScope());
 
-            log.info("Token issued: client_id={}", client_id);
             return ResponseEntity.ok(response);
 
         } catch (BadCredentialsException e) {

@@ -4,14 +4,25 @@ import kr.hyfata.rest.api.dto.OAuthTokenResponse;
 
 public interface OAuthService {
     /**
-     * Authorization Code 생성
+     * Authorization Code 생성 (PKCE 없음)
      */
     String generateAuthorizationCode(String clientId, String email, String redirectUri, String state);
 
     /**
-     * Authorization Code 검증 및 토큰 발급
+     * Authorization Code 생성 (PKCE 포함)
+     */
+    String generateAuthorizationCode(String clientId, String email, String redirectUri, String state,
+                                     String codeChallenge, String codeChallengeMethod);
+
+    /**
+     * Authorization Code 검증 및 토큰 발급 (PKCE 없음)
      */
     OAuthTokenResponse exchangeCodeForToken(String code, String clientId, String clientSecret, String redirectUri);
+
+    /**
+     * Authorization Code 검증 및 토큰 발급 (PKCE 포함)
+     */
+    OAuthTokenResponse exchangeCodeForToken(String code, String clientId, String clientSecret, String redirectUri, String codeVerifier);
 
     /**
      * Authorization Code 유효성 검증

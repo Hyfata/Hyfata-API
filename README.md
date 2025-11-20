@@ -13,6 +13,7 @@ Spring Boot 3.4.4 기반의 멀티테넌시 인증 API. Google OAuth, Discord OA
 - 여러 사이트/앱 동시 지원
 - CSRF 방지 (State 파라미터)
 - 일회용 Authorization Code
+- 🆕 **PKCE 지원** (RFC 7636) - 모바일 앱 보안
 
 ### ✅ 완전한 인증 시스템
 - JWT 기반 토큰 (Access + Refresh)
@@ -103,6 +104,7 @@ spring.datasource.password=your_password
 ### 상세 가이드
 - **[OAUTH_2_AUTHORIZATION_CODE_FLOW.md](./OAUTH_2_AUTHORIZATION_CODE_FLOW.md)**: OAuth 2.0 완전 구현 가이드
 - **[OAUTH_IMPLEMENTATION_SUMMARY.md](./OAUTH_IMPLEMENTATION_SUMMARY.md)**: 구현 요약 및 아키텍처
+- **[PKCE_IMPLEMENTATION.md](./PKCE_IMPLEMENTATION.md)**: 🆕 PKCE (RFC 7636) 구현 가이드 - Flutter 앱 로그인 예제 포함
 
 ### 인증 시스템
 - **[API_AUTHENTICATION.md](./API_AUTHENTICATION.md)**: JWT 및 인증 엔드포인트
@@ -132,6 +134,12 @@ spring.datasource.password=your_password
 - ✅ **State Parameter**: 세션 상태 추적
 - ✅ **Redirect URI**: 화이트리스트 검증
 
+### PKCE (Proof Key for Code Exchange)
+- ✅ **code_challenge**: SHA-256 기반 생성
+- ✅ **code_verifier**: 클라이언트 측에서만 관리
+- ✅ **Authorization Code 탈취 방지**: 코드 탈취 시에도 토큰 획득 불가
+- ✅ **모바일 앱 최적화**: Flutter, React Native 등 모바일 앱용
+
 ### Password Security
 - ✅ **BCrypt**: 업계 표준 암호화
 - ✅ **Salt**: 자동 salt 생성
@@ -146,9 +154,10 @@ spring.datasource.password=your_password
 ├─────────────────────────────────────────┤
 │                                         │
 │  ┌─────────────────────────────────┐  │
-│  │  OAuth 2.0 Layer               │  │
-│  │  - Authorization Code Flow     │  │
-│  │  - Token Exchange              │  │
+│  │  OAuth 2.0 + PKCE Layer         │  │
+│  │  - Authorization Code Flow      │  │
+│  │  - Token Exchange               │  │
+│  │  - PKCE (RFC 7636)              │  │
 │  └─────────────────────────────────┘  │
 │                  ↓                     │
 │  ┌─────────────────────────────────┐  │
@@ -318,7 +327,7 @@ MIT License
 ## 🎯 향후 계획
 
 - [ ] OAuth 2.0 Implicit Flow (SPA용)
-- [ ] PKCE 지원 (모바일 앱용)
+- [x] PKCE 지원 (모바일 앱용) ✅ **완료**
 - [ ] Scopes 세분화
 - [ ] Rate Limiting
 - [ ] WebAuthn 지원
@@ -351,9 +360,11 @@ MIT License
 ## 📚 참고 자료
 
 - [OAuth 2.0 공식 스펙](https://tools.ietf.org/html/rfc6749)
+- [PKCE (RFC 7636)](https://tools.ietf.org/html/rfc7636) - 🆕 모바일 앱 보안
 - [Spring Security 문서](https://spring.io/projects/spring-security)
 - [JWT 소개](https://jwt.io)
 - [OWASP 보안 가이드](https://owasp.org/)
+- [Google OAuth 2.0 PKCE 구현](https://developers.google.com/identity/protocols/oauth2/native-app)
 
 ---
 

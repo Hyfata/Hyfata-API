@@ -9,6 +9,7 @@ import kr.hyfata.rest.api.repository.ClientRepository;
 import kr.hyfata.rest.api.repository.UserRepository;
 import kr.hyfata.rest.api.service.OAuthService;
 import kr.hyfata.rest.api.util.JwtUtil;
+import kr.hyfata.rest.api.util.PkceUtil;
 import kr.hyfata.rest.api.util.TokenGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +18,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -29,9 +29,16 @@ public class OAuthServiceImpl implements OAuthService {
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
     private final TokenGenerator tokenGenerator;
+    private final PkceUtil pkceUtil;
 
     @Override
     public String generateAuthorizationCode(String clientId, String email, String redirectUri, String state) {
+        return generateAuthorizationCode(clientId, email, redirectUri, state, null, null);
+    }
+
+    @Override
+    public String generateAuthorizationCode(String clientId, String email, String redirectUri, String state,
+                                           String codeChallenge, String codeChallengeMethod) {
         // 클라이언트 검증
         Client client = clientRepository.findByClientId(clientId)
                 .orElseThrow(() -> new BadCredentialsException("Invalid client"));
@@ -52,24 +59,41 @@ public class OAuthServiceImpl implements OAuthService {
         // Authorization Code 생성
         String code = tokenGenerator.generatePasswordResetToken();  // 긴 난수 토큰
 
-        AuthorizationCode authCode = AuthorizationCode.builder()
+        AuthorizationCode.AuthorizationCodeBuilder builder = AuthorizationCode.builder()
                 .code(code)
                 .clientId(clientId)
                 .email(email)
                 .redirectUri(redirectUri)
                 .state(state)
                 .used(false)
-                .expiresAt(LocalDateTime.now().plusMinutes(10))  // 10분 유효
-                .build();
+                .expiresAt(LocalDateTime.now().plusMinutes(10));  // 10분 유효
 
+        // PKCE 파라미터가 제공되면 저장
+        if (codeChallenge != null && !codeChallenge.isEmpty()) {
+            builder.codeChallenge(codeChallenge);
+            builder.codeChallengeMethod(codeChallengeMethod != null ? codeChallengeMethod : "S256");
+            log.info("PKCE enabled for authorization code: client_id={}, method={}", clientId, codeChallengeMethod);
+        }
+
+        AuthorizationCode authCode = builder.build();
         authorizationCodeRepository.save(authCode);
-        log.info("Authorization code generated for client: {}, email: {}", clientId, email);
+
+        if (codeChallenge != null && !codeChallenge.isEmpty()) {
+            log.info("Authorization code generated with PKCE: client_id={}, email={}", clientId, email);
+        } else {
+            log.info("Authorization code generated for client: {}, email: {}", clientId, email);
+        }
 
         return code;
     }
 
     @Override
     public OAuthTokenResponse exchangeCodeForToken(String code, String clientId, String clientSecret, String redirectUri) {
+        return exchangeCodeForToken(code, clientId, clientSecret, redirectUri, null);
+    }
+
+    @Override
+    public OAuthTokenResponse exchangeCodeForToken(String code, String clientId, String clientSecret, String redirectUri, String codeVerifier) {
         // 1. Authorization Code 검증
         AuthorizationCode authCode = authorizationCodeRepository.findByCodeAndClientId(code, clientId)
                 .orElseThrow(() -> new BadCredentialsException("Invalid authorization code"));
@@ -90,7 +114,27 @@ public class OAuthServiceImpl implements OAuthService {
             throw new BadCredentialsException("Redirect URI mismatch");
         }
 
-        // 5. Client Secret 검증
+        // 5. PKCE 검증 (code_challenge가 저장되어 있으면 code_verifier 필수)
+        if (authCode.getCodeChallenge() != null && !authCode.getCodeChallenge().isEmpty()) {
+            if (codeVerifier == null || codeVerifier.isEmpty()) {
+                throw new BadCredentialsException("code_verifier is required for PKCE flow");
+            }
+
+            // code_verifier 유효성 검증
+            if (!pkceUtil.isValidCodeVerifier(codeVerifier)) {
+                throw new BadCredentialsException("Invalid code_verifier format");
+            }
+
+            // code_verifier와 code_challenge 검증
+            if (!pkceUtil.verifyCodeChallenge(codeVerifier, authCode.getCodeChallenge())) {
+                log.warn("PKCE verification failed: clientId={}, email={}", clientId, authCode.getEmail());
+                throw new BadCredentialsException("code_verifier verification failed");
+            }
+
+            log.debug("PKCE verification successful: clientId={}, email={}", clientId, authCode.getEmail());
+        }
+
+        // 6. Client Secret 검증
         Client client = clientRepository.findByClientIdAndClientSecret(clientId, clientSecret)
                 .orElseThrow(() -> new BadCredentialsException("Invalid client credentials"));
 
@@ -98,20 +142,24 @@ public class OAuthServiceImpl implements OAuthService {
             throw new BadCredentialsException("Client is disabled");
         }
 
-        // 6. 사용자 조회
+        // 7. 사용자 조회
         User user = userRepository.findByEmail(authCode.getEmail())
                 .orElseThrow(() -> new BadCredentialsException("User not found"));
 
-        // 7. 코드 사용 표시
+        // 8. 코드 사용 표시
         authCode.setUsed(true);
         authorizationCodeRepository.save(authCode);
 
-        // 8. 토큰 생성
+        // 9. 토큰 생성
         String accessToken = jwtUtil.generateAccessToken(user);
         String refreshToken = jwtUtil.generateRefreshToken(user);
         long expiresIn = 86400000;  // 24시간
 
-        log.info("Authorization code exchanged for tokens: clientId={}, email={}", clientId, authCode.getEmail());
+        if (authCode.getCodeChallenge() != null && !authCode.getCodeChallenge().isEmpty()) {
+            log.info("Authorization code exchanged for tokens (PKCE): clientId={}, email={}", clientId, authCode.getEmail());
+        } else {
+            log.info("Authorization code exchanged for tokens: clientId={}, email={}", clientId, authCode.getEmail());
+        }
 
         return OAuthTokenResponse.builder()
                 .accessToken(accessToken)
