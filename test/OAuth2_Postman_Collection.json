@@ -1,0 +1,562 @@
+{
+  "info": {
+    "_postman_id": "oauth2-authorization-flow-collection",
+    "name": "OAuth 2.0 Authorization Code Flow - Hyfata API",
+    "description": "Complete OAuth 2.0 Authorization Code Flow testing for Hyfata REST API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01. Client Management",
+      "item": [
+        {
+          "name": "Register New Client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test App\",\n  \"description\": \"Test application for OAuth 2.0 testing\",\n  \"frontendUrl\": \"http://localhost:3000\",\n  \"redirectUris\": [\n    \"http://localhost:3000/callback\",\n    \"http://localhost:3001/callback\"\n  ],\n  \"maxTokensPerUser\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/clients/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "clients",
+                "register"
+              ]
+            },
+            "description": "Register a new OAuth 2.0 client (application)\n\nAfter registration, save:\n- clientId\n- clientSecret"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Client Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/clients/{{client_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "clients",
+                "{{client_id}}"
+              ]
+            },
+            "description": "Retrieve registered client information"
+          },
+          "response": []
+        },
+        {
+          "name": "Check Client Exists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/clients/exists/{{client_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "clients",
+                "exists",
+                "{{client_id}}"
+              ]
+            },
+            "description": "Check if a client exists"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02. User Management",
+      "item": [
+        {
+          "name": "Register Test User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"testuser@example.com\",\n  \"password\": \"TestPassword123!\",\n  \"name\": \"Test User\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Register a new test user\n\nNote: You need to verify the email in the database:\nUPDATE users SET email_verified = true WHERE email = 'testuser@example.com';"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03. OAuth Authorization Flow",
+      "item": [
+        {
+          "name": "Step 1: Authorization Request (Browser)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/oauth/authorize?client_id={{client_id}}&redirect_uri={{redirect_uri}}&state=random_state_123&response_type=code",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "oauth",
+                "authorize"
+              ],
+              "query": [
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "{{redirect_uri}}"
+                },
+                {
+                  "key": "state",
+                  "value": "random_state_123"
+                },
+                {
+                  "key": "response_type",
+                  "value": "code"
+                }
+              ]
+            },
+            "description": "This step displays the login page.\n\nAction: Copy this URL to your browser and open it.\nYou will see the login form with pre-filled parameters."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 2: Login & Get Authorization Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "email",
+                  "value": "{{email}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "{{redirect_uri}}"
+                },
+                {
+                  "key": "state",
+                  "value": "random_state_123"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/oauth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "oauth",
+                "login"
+              ]
+            },
+            "description": "Login with email and password.\n\nResponse: 302 Redirect to redirect_uri?code=AUTH_CODE&state=STATE\n\nAction: Check the response headers for the Location header and extract the authorization code.\n\nTip: In Postman, disable \"Follow redirects\" in Settings to see the redirect URL."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 3: Exchange Code for Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code"
+                },
+                {
+                  "key": "code",
+                  "value": "{{auth_code}}"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{client_secret}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "{{redirect_uri}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/oauth/token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "description": "Exchange authorization code for access and refresh tokens.\n\nResponse includes:\n- access_token (24 hours validity)\n- refresh_token (7 days validity)\n- token_type (Bearer)\n- expires_in\n- scope\n\nAction: Save access_token and refresh_token for subsequent requests."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04. Token Usage & Refresh",
+      "item": [
+        {
+          "name": "Access Protected Resource",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/protected/user",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "protected",
+                "user"
+              ]
+            },
+            "description": "Access a protected resource using the access token.\n\nHeader required: Authorization: Bearer {access_token}"
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Access Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Get a new access token using the refresh token.\n\nUse this when access_token expires (24 hours)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05. Error Test Cases",
+      "item": [
+        {
+          "name": "Invalid Client ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code"
+                },
+                {
+                  "key": "code",
+                  "value": "some_code"
+                },
+                {
+                  "key": "client_id",
+                  "value": "invalid_client_id"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "some_secret"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "http://localhost:3000/callback"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/oauth/token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "description": "Test with invalid client ID\n\nExpected: 400 Bad Request"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Client Secret",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code"
+                },
+                {
+                  "key": "code",
+                  "value": "some_code"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "wrong_secret"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "{{redirect_uri}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/oauth/token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "description": "Test with wrong client secret\n\nExpected: 400 Bad Request"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Authorization Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code"
+                },
+                {
+                  "key": "code",
+                  "value": "invalid_code_12345"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{client_secret}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "{{redirect_uri}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/oauth/token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "description": "Test with invalid authorization code\n\nExpected: 400 Bad Request"
+          },
+          "response": []
+        },
+        {
+          "name": "Missing Authorization Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{client_secret}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "{{redirect_uri}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/oauth/token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "description": "Test without authorization code\n\nExpected: 400 Bad Request"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "client_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "client_secret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "testuser@example.com",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "TestPassword123!",
+      "type": "string"
+    },
+    {
+      "key": "redirect_uri",
+      "value": "http://localhost:3000/callback",
+      "type": "string"
+    },
+    {
+      "key": "auth_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
