@@ -38,6 +38,11 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
+                        // 인증 필요 엔드포인트 (명시적)
+                        .requestMatchers("/api/auth/logout").authenticated()
+                        .requestMatchers("/api/auth/enable-2fa").authenticated()
+                        .requestMatchers("/api/auth/disable-2fa").authenticated()
+                        .requestMatchers("/api/sessions/**").authenticated()
                         // 공개 엔드포인트
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
