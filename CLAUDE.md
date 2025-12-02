@@ -29,9 +29,10 @@
 ```
 controller/     → REST 엔드포인트 (AuthController, OAuthController, SessionController, ClientController)
 service/        → 비즈니스 로직 (interface + impl/ 구현체)
-repository/     → JPA Repository (UserRepository, ClientRepository, etc.)
+repository/     → JPA Repository
+  └── agora/    → Agora Repository (23개)
 entity/         → JPA 엔티티 (User, Client, UserSession, AuthorizationCode)
-  └── agora/    → Agora 모듈 엔티티 (Chat, Team, Friend 등 - 미구현)
+  └── agora/    → Agora 엔티티 (23개 - 아래 참조)
 dto/            → 요청/응답 DTO
 util/           → 유틸리티 (JwtUtil, PkceUtil, IpUtil, DeviceDetector, GeoIpService)
 config/         → 설정 (SecurityConfig, RedisConfig)
@@ -84,7 +85,19 @@ scheduler/      → OAuthCleanupScheduler (만료 코드 정리)
 - `test/OAUTH2_PKCE_TESTING.md` - Postman 테스트 가이드
 - `test/OAuth2_PKCE_Complete_Testing.json` - Postman 컬렉션
 
+## Agora Module (Entity/Repository 완료)
+
+실시간 채팅 및 협업 기능 (Service/Controller 미구현)
+
+| 분류 | 엔티티 |
+|------|--------|
+| 사용자 | AgoraUserProfile, TeamProfile, UserSettings, BlockedUser |
+| 친구 | Friend, FriendRequest |
+| 채팅 | Chat, ChatParticipant, ChatFolder, ChatFolderItem |
+| 메시지 | Message, MessageAttachment, MessageReadStatus |
+| 팀 | Team, TeamMember, TeamRole, Notice, Todo, Event |
+| 기타 | Notification, FcmToken, AgoraFile, FileMetadata |
+
 ## Notes
 
 - `FirstService`, `FirstServiceImpl`은 레거시 테스트 코드 (삭제 가능)
-- `entity/agora/` 패키지는 향후 구현 예정인 Agora 모듈용
