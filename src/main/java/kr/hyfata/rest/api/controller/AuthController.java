@@ -92,9 +92,13 @@ public class AuthController {
     }
 
     /**
-     * 토큰 갱신
+     * 토큰 갱신 (Deprecated)
      * POST /api/auth/refresh
+     *
+     * @deprecated 이 엔드포인트는 보안상의 이유로 권장되지 않습니다.
+     *             OAuth 2.0 플로우(/oauth/token, grant_type=refresh_token)를 사용하세요.
      */
+    @Deprecated
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refreshToken(
             @RequestBody RefreshTokenRequest request,
@@ -102,6 +106,7 @@ public class AuthController {
     ) {
         try {
             AuthResponse response = authService.refreshToken(request, httpRequest);
+            response.setDeprecationWarning("This endpoint is deprecated. Please use OAuth 2.0 (/oauth/token with grant_type=refresh_token) for better security.");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Token refresh error: {}", e.getMessage());
