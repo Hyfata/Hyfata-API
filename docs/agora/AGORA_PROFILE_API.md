@@ -116,6 +116,7 @@ Authorization: Bearer {access_token}
 Content-Type: application/json
 
 {
+  "agoraId": "new_user_id",
   "displayName": "새이름",
   "profileImage": "https://example.com/new-image.jpg",
   "bio": "새 소개글",
@@ -145,7 +146,10 @@ Content-Type: application/json
 | 상태 | 메시지 | 원인 |
 |------|--------|------|
 | 404 | `Agora profile not found. Please create a profile first.` | 프로필이 없음 |
+| 400 | `agoraId must be between 3 and 50 characters` | agoraId 길이 오류 |
+| 400 | `agoraId can only contain letters, numbers, and underscores` | agoraId 형식 오류 |
 | 400 | `displayName must be between 1 and 100 characters` | displayName 길이 초과 |
+| 409 | `agoraId already taken` | 중복된 agoraId |
 | 401 | `Unauthorized` | 인증 토큰 없음/만료 |
 
 ---
@@ -299,6 +303,7 @@ class AgoraProfileService {
 
   // 프로필 수정
   Future<AgoraProfile> updateProfile({
+    String? agoraId,
     String? displayName,
     String? profileImage,
     String? bio,
@@ -308,6 +313,7 @@ class AgoraProfileService {
     try {
       final body = <String, dynamic>{};
 
+      if (agoraId != null) body['agoraId'] = agoraId;
       if (displayName != null) body['displayName'] = displayName;
       if (profileImage != null) body['profileImage'] = profileImage;
       if (bio != null) body['bio'] = bio;
@@ -324,6 +330,8 @@ class AgoraProfileService {
         return AgoraProfile.fromJson(jsonDecode(response.body));
       } else if (response.statusCode == 404) {
         throw ProfileNotFoundException('프로필이 존재하지 않습니다');
+      } else if (response.statusCode == 409) {
+        throw DuplicateAgoraIdException('이미 사용 중인 agoraId입니다');
       } else if (response.statusCode == 400) {
         final error = jsonDecode(response.body);
         throw ValidationException(error['message'] ?? '유효하지 않은 입력');
@@ -492,7 +500,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
 ## 주의사항
 
-1. **agoraId는 변경 불가능**: 프로필 생성 후 agoraId는 수정할 수 없습니다. 필요시 삭제 후 재생성 필요.
+1. **agoraId 변경 가능**: PUT 요청으로 agoraId를 변경할 수 있습니다. 단, 중복된 agoraId는 사용할 수 없습니다.
 2. **토큰 만료**: 401 에러 발생 시 토큰을 갱신하고 재시도해야 합니다.
 3. **부분 업데이트**: PUT 요청 시 변경할 필드만 포함하면, 다른 필드는 유지됩니다.
 4. **날짜 포맷**: birthday는 `YYYY-MM-DD` 형식을 사용합니다.

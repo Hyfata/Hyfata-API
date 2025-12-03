@@ -69,6 +69,15 @@ public class AgoraProfileServiceImpl implements AgoraProfileService {
         AgoraUserProfile profile = agoraUserProfileRepository.findById(user.getId())
                 .orElseThrow(() -> new IllegalStateException("Agora profile not found. Please create a profile first."));
 
+        if (request.getAgoraId() != null) {
+            String newAgoraId = request.getAgoraId();
+            if (!newAgoraId.equals(profile.getAgoraId())) {
+                if (agoraUserProfileRepository.existsByAgoraId(newAgoraId)) {
+                    throw new IllegalArgumentException("agoraId already taken");
+                }
+                profile.setAgoraId(newAgoraId);
+            }
+        }
         if (request.getDisplayName() != null) {
             profile.setDisplayName(request.getDisplayName());
         }
