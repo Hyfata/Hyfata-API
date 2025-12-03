@@ -100,7 +100,6 @@ public class ClientServiceImpl implements ClientService {
         return ClientResponse.builder()
                 .id(client.getId())
                 .clientId(client.getClientId())
-                .clientSecret(null)  // clientSecret은 절대 반환하지 않음
                 .name(client.getName())
                 .description(client.getDescription())
                 .frontendUrl(client.getFrontendUrl())

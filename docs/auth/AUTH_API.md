@@ -863,7 +863,6 @@ GET /api/clients/client_a1b2c3d4e5f6
   "client": {
     "id": 1,
     "clientId": "client_a1b2c3d4e5f6",
-    "clientSecret": "secret_x9y8z7w6v5u4",
     "name": "My Application",
     "description": "A sample OAuth client application",
     "frontendUrl": "https://myapp.com",
@@ -878,6 +877,8 @@ GET /api/clients/client_a1b2c3d4e5f6
   }
 }
 ```
+
+> **Note:** `clientSecret`은 보안상 조회 API에서 반환되지 않습니다. 클라이언트 등록 시에만 한 번 확인할 수 있습니다.
 
 #### Error Response (404 Not Found)
 
