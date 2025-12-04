@@ -29,9 +29,6 @@ public class AgoraUserProfile {
     @JoinColumn(name = "id")
     private User user;
 
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    private TeamProfile teamProfile;
-
     @Column(unique = true, nullable = false, length = 50)
     private String agoraId;
 
