@@ -56,10 +56,45 @@ public class AgoraFileController {
     }
 
     /**
-     * 파일 메타데이터 조회
-     * GET /api/agora/files/{fileId}
+     * 파일명으로 파일 서빙 (공개 접근)
+     * GET /api/agora/files/{fileName}
      */
-    @GetMapping("/{fileId}")
+    @GetMapping("/{fileName:.+}")
+    public ResponseEntity<Resource> serveFile(@PathVariable String fileName) {
+        try {
+            Resource resource = agoraFileService.loadFileAsResource(fileName);
+
+            // MIME 타입 결정
+            String contentType = "application/octet-stream";
+            if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+                contentType = "image/jpeg";
+            } else if (fileName.endsWith(".png")) {
+                contentType = "image/png";
+            } else if (fileName.endsWith(".gif")) {
+                contentType = "image/gif";
+            } else if (fileName.endsWith(".webp")) {
+                contentType = "image/webp";
+            } else if (fileName.endsWith(".mp4")) {
+                contentType = "video/mp4";
+            } else if (fileName.endsWith(".pdf")) {
+                contentType = "application/pdf";
+            }
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CACHE_CONTROL, "max-age=86400")
+                    .body(resource);
+        } catch (Exception e) {
+            log.error("파일 서빙 실패: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * 파일 메타데이터 조회
+     * GET /api/agora/files/meta/{fileId}
+     */
+    @GetMapping("/meta/{fileId}")
     public ResponseEntity<FileUploadResponse> getFileMetadata(
             @PathVariable Long fileId
     ) {

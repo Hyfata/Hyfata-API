@@ -10,12 +10,14 @@ import kr.hyfata.rest.api.service.agora.AgoraFileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.coobird.thumbnailator.Thumbnailator;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -147,5 +149,22 @@ public class AgoraFileServiceImpl implements AgoraFileService {
             return AgoraFile.FileType.DOCUMENT;
         }
         return AgoraFile.FileType.OTHER;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Resource loadFileAsResource(String fileName) {
+        try {
+            Path filePath = FileStorageConfig.getUploadPath().resolve(fileName).normalize();
+            Resource resource = new UrlResource(filePath.toUri());
+
+            if (resource.exists() && resource.isReadable()) {
+                return resource;
+            } else {
+                throw new RuntimeException("파일을 찾을 수 없습니다: " + fileName);
+            }
+        } catch (MalformedURLException e) {
+            throw new RuntimeException("파일을 찾을 수 없습니다: " + fileName, e);
+        }
     }
 }

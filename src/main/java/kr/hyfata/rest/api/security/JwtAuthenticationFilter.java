@@ -42,7 +42,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             final String jwt = extractJwtFromRequest(request);
 
+            log.debug("JWT from request: {}", jwt != null ? "present" : "null");
+
+            if (jwt == null) {
+                log.debug("No JWT token in request");
+            } else if (!jwtUtil.validateToken(jwt)) {
+                log.warn("JWT validation failed for token");
+            }
+
             if (jwt != null && jwtUtil.validateToken(jwt)) {
+                log.debug("JWT validation passed");
                 // 민감한 API인 경우 블랙리스트 확인
                 if (isSensitiveEndpoint(request.getRequestURI())) {
                     String jti = jwtUtil.extractJti(jwt);
@@ -56,13 +65,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
 
                 final String email = jwtUtil.extractEmail(jwt);
+                log.debug("Extracted email from JWT: {}", email);
+
                 final UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+                log.debug("Loaded user: {}, username: {}", userDetails != null, userDetails != null ? userDetails.getUsername() : "null");
 
                 if (jwtUtil.validateToken(jwt, userDetails)) {
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
+                    log.debug("Authentication set successfully for user: {}", email);
+                } else {
+                    log.warn("Token validation with userDetails failed for email: {}", email);
                 }
             }
         } catch (Exception e) {

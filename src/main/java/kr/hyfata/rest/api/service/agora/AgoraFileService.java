@@ -1,6 +1,7 @@
 package kr.hyfata.rest.api.service.agora;
 
 import kr.hyfata.rest.api.dto.agora.FileUploadResponse;
+import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface AgoraFileService {
@@ -35,4 +36,11 @@ public interface AgoraFileService {
      * @return 삭제 성공 메시지
      */
     String deleteFile(String userEmail, Long fileId);
+
+    /**
+     * 파일명으로 파일 리소스 로드
+     * @param fileName 파일명
+     * @return 파일 리소스
+     */
+    Resource loadFileAsResource(String fileName);
 }

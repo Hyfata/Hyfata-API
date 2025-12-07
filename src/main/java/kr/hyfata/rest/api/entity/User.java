@@ -116,6 +116,22 @@ public class User implements UserDetails {
         return List.of(new SimpleGrantedAuthority("ROLE_USER"));
     }
 
+    /**
+     * Spring Security의 UserDetails.getUsername() 구현
+     * JWT 토큰이 email을 subject로 사용하므로 email을 반환
+     */
+    @Override
+    public String getUsername() {
+        return email;
+    }
+
+    /**
+     * 실제 username 필드 접근용 메서드
+     */
+    public String getDisplayName() {
+        return username;
+    }
+
     @Override
     public boolean isAccountNonExpired() {
         return accountNonExpired;
