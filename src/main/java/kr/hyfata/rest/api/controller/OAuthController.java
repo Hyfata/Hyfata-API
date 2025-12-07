@@ -437,6 +437,7 @@ public class OAuthController {
             registerRequest.setEmail(email);
             registerRequest.setPassword(password);
             registerRequest.setUsername(username);
+            registerRequest.setClientId(client_id);
 
             authService.register(registerRequest);
 
