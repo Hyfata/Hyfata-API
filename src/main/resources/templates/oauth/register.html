@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>로그인 - Hyfata</title>
+    <title>회원가입 - Hyfata</title>
     <style>
         * {
             margin: 0;
@@ -20,7 +20,7 @@
             justify-content: center;
         }
 
-        .login-container {
+        .register-container {
             background: white;
             border-radius: 8px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
@@ -29,18 +29,18 @@
             padding: 40px;
         }
 
-        .login-header {
+        .register-header {
             text-align: center;
             margin-bottom: 30px;
         }
 
-        .login-header h1 {
+        .register-header h1 {
             font-size: 28px;
             color: #333;
             margin-bottom: 8px;
         }
 
-        .login-header p {
+        .register-header p {
             font-size: 14px;
             color: #666;
         }
@@ -77,7 +77,8 @@
         }
 
         input[type="email"],
-        input[type="password"] {
+        input[type="password"],
+        input[type="text"] {
             width: 100%;
             padding: 10px 12px;
             border: 1px solid #ddd;
@@ -87,7 +88,8 @@
         }
 
         input[type="email"]:focus,
-        input[type="password"]:focus {
+        input[type="password"]:focus,
+        input[type="text"]:focus {
             outline: none;
             border-color: #00bcd4;
             box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.1);
@@ -129,30 +131,20 @@
             border-left: 4px solid #c33;
         }
 
-        .warning {
-            background: #fff3cd;
-            color: #856404;
-            padding: 12px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            font-size: 13px;
-            border-left: 4px solid #ffc107;
-        }
-
-        .register-link {
+        .login-link {
             text-align: center;
             margin-top: 20px;
             padding-top: 20px;
             border-top: 1px solid #eee;
         }
 
-        .register-link p {
+        .login-link p {
             font-size: 14px;
             color: #666;
             margin-bottom: 12px;
         }
 
-        .register-btn {
+        .login-btn {
             display: inline-block;
             background: transparent;
             color: #00bcd4;
@@ -165,17 +157,17 @@
             transition: all 0.2s;
         }
 
-        .register-btn:hover {
+        .login-btn:hover {
             background: #00bcd4;
             color: white;
         }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="login-header">
+    <div class="register-container">
+        <div class="register-header">
             <h1>Hyfata</h1>
-            <p>계속하려면 로그인하세요</p>
+            <p>새 계정 만들기</p>
         </div>
 
         <!-- 클라이언트 정보 표시 -->
@@ -187,12 +179,8 @@
         <!-- 에러 메시지 -->
         <div th:if="${error}" class="error-message" th:text="${error}"></div>
 
-        <!-- PKCE 파라미터 (hidden) -->
-        <input type="hidden" id="code_challenge" th:value="${code_challenge}">
-        <input type="hidden" id="code_challenge_method" th:value="${code_challenge_method}">
-
-        <!-- 로그인 폼 -->
-        <form method="POST" action="/oauth/login">
+        <!-- 회원가입 폼 -->
+        <form method="POST" action="/oauth/register">
             <input type="hidden" name="client_id" th:value="${client_id}">
             <input type="hidden" name="redirect_uri" th:value="${redirect_uri}">
             <input type="hidden" name="state" th:value="${state}">
@@ -213,6 +201,18 @@
             </div>
 
             <div class="form-group">
+                <label for="username">사용자 이름</label>
+                <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    th:value="${username}"
+                    required
+                    placeholder="사용자 이름을 입력하세요"
+                >
+            </div>
+
+            <div class="form-group">
                 <label for="password">비밀번호</label>
                 <input
                     type="password"
@@ -223,13 +223,13 @@
                 >
             </div>
 
-            <button type="submit" class="submit-btn">로그인</button>
+            <button type="submit" class="submit-btn">회원가입</button>
         </form>
 
-        <!-- 회원가입 링크 -->
-        <div class="register-link">
-            <p>계정이 없으신가요?</p>
-            <a th:href="@{/oauth/register(client_id=${client_id}, redirect_uri=${redirect_uri}, state=${state}, code_challenge=${code_challenge}, code_challenge_method=${code_challenge_method})}" class="register-btn">회원가입</a>
+        <!-- 로그인 링크 -->
+        <div class="login-link">
+            <p>이미 계정이 있으신가요?</p>
+            <a th:href="@{/oauth/authorize(client_id=${client_id}, redirect_uri=${redirect_uri}, response_type='code', state=${state}, code_challenge=${code_challenge}, code_challenge_method=${code_challenge_method})}" class="login-btn">로그인</a>
         </div>
     </div>
 </body>

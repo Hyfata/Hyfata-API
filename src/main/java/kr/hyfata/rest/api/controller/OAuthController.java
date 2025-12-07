@@ -2,8 +2,10 @@ package kr.hyfata.rest.api.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
 import kr.hyfata.rest.api.dto.OAuthTokenResponse;
+import kr.hyfata.rest.api.dto.RegisterRequest;
 import kr.hyfata.rest.api.entity.User;
 import kr.hyfata.rest.api.repository.UserRepository;
+import kr.hyfata.rest.api.service.AuthService;
 import kr.hyfata.rest.api.service.ClientService;
 import kr.hyfata.rest.api.service.OAuthService;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ public class OAuthController {
 
     private final OAuthService oAuthService;
     private final ClientService clientService;
+    private final AuthService authService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -68,7 +71,8 @@ public class OAuthController {
 
         try {
             // 클라이언트 검증
-            if (!clientService.validateClient(client_id).isPresent()) {
+            var clientOpt = clientService.validateClient(client_id);
+            if (clientOpt.isEmpty()) {
                 model.addAttribute("error", "Invalid client");
                 return "oauth/error";
             }
@@ -92,6 +96,7 @@ public class OAuthController {
 
             // 로그인 페이지로 이동 (state와 클라이언트 정보 전달)
             model.addAttribute("client_id", client_id);
+            model.addAttribute("client_name", clientOpt.get().getName());
             model.addAttribute("redirect_uri", redirect_uri);
             model.addAttribute("state", state);
 
@@ -363,6 +368,104 @@ public class OAuthController {
             error.put("success", false);
             error.put("error", "Logout failed");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    /**
+     * 회원가입 페이지
+     * GET /oauth/register
+     */
+    @GetMapping("/register")
+    public String registerPage(
+            @RequestParam String client_id,
+            @RequestParam String redirect_uri,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String code_challenge,
+            @RequestParam(required = false) String code_challenge_method,
+            Model model) {
+
+        try {
+            // 클라이언트 검증
+            var clientOpt = clientService.validateClient(client_id);
+            if (clientOpt.isEmpty()) {
+                model.addAttribute("error", "Invalid client");
+                return "oauth/error";
+            }
+
+            model.addAttribute("client_id", client_id);
+            model.addAttribute("client_name", clientOpt.get().getName());
+            model.addAttribute("redirect_uri", redirect_uri);
+            model.addAttribute("state", state);
+            model.addAttribute("code_challenge", code_challenge);
+            model.addAttribute("code_challenge_method", code_challenge_method);
+
+            return "oauth/register";
+
+        } catch (Exception e) {
+            log.error("Register page error: {}", e.getMessage());
+            model.addAttribute("error", "Failed to load register page");
+            return "oauth/error";
+        }
+    }
+
+    /**
+     * 회원가입 처리
+     * POST /oauth/register
+     */
+    @PostMapping("/register")
+    public String register(
+            @RequestParam String email,
+            @RequestParam String password,
+            @RequestParam String username,
+            @RequestParam String client_id,
+            @RequestParam String redirect_uri,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String code_challenge,
+            @RequestParam(required = false) String code_challenge_method,
+            Model model) {
+
+        try {
+            // 클라이언트 검증
+            var clientOpt = clientService.validateClient(client_id);
+            if (clientOpt.isEmpty()) {
+                model.addAttribute("error", "Invalid client");
+                return "oauth/error";
+            }
+
+            // 회원가입 처리
+            RegisterRequest registerRequest = new RegisterRequest();
+            registerRequest.setEmail(email);
+            registerRequest.setPassword(password);
+            registerRequest.setUsername(username);
+
+            authService.register(registerRequest);
+
+            log.info("User registered via OAuth flow: email={}", email);
+
+            // 회원가입 성공 - 이메일 확인 페이지로 이동 (파라미터 유지)
+            model.addAttribute("email", email);
+            model.addAttribute("client_id", client_id);
+            model.addAttribute("client_name", clientOpt.get().getName());
+            model.addAttribute("redirect_uri", redirect_uri);
+            model.addAttribute("state", state);
+            model.addAttribute("code_challenge", code_challenge);
+            model.addAttribute("code_challenge_method", code_challenge_method);
+
+            return "oauth/verify-email";
+
+        } catch (Exception e) {
+            log.warn("Registration error: {}", e.getMessage());
+            model.addAttribute("error", e.getMessage());
+            model.addAttribute("email", email);
+            model.addAttribute("username", username);
+            model.addAttribute("client_id", client_id);
+            model.addAttribute("client_name", clientService.validateClient(client_id)
+                    .map(c -> c.getName()).orElse(client_id));
+            model.addAttribute("redirect_uri", redirect_uri);
+            model.addAttribute("state", state);
+            model.addAttribute("code_challenge", code_challenge);
+            model.addAttribute("code_challenge_method", code_challenge_method);
+            return "oauth/register";
         }
     }
 
