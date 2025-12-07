@@ -202,26 +202,30 @@ public class OAuthController {
      * 3단계: Authorization Code를 Token으로 교환 또는 Refresh Token으로 갱신
      * POST /oauth/token
      *
-     * 요청 - Authorization Code (PKCE 없음, application/x-www-form-urlencoded):
+     * 요청 - Authorization Code (Confidential Client - client_secret 사용):
      * grant_type=authorization_code&
      * code=xxx&
      * client_id=client_001&
      * client_secret=secret_001&
      * redirect_uri=https://site1.com/callback
      *
-     * 요청 - Authorization Code (PKCE 포함, application/x-www-form-urlencoded):
+     * 요청 - Authorization Code (Public Client - PKCE 사용, client_secret 불필요):
      * grant_type=authorization_code&
      * code=xxx&
      * client_id=client_001&
-     * client_secret=secret_001&
      * redirect_uri=https://site1.com/callback&
      * code_verifier=xxxxxx...
      *
-     * 요청 - Refresh Token:
+     * 요청 - Refresh Token (Confidential Client):
      * grant_type=refresh_token&
      * refresh_token=xxx&
      * client_id=client_001&
      * client_secret=secret_001
+     *
+     * 요청 - Refresh Token (Public Client - PKCE 기반 세션):
+     * grant_type=refresh_token&
+     * refresh_token=xxx&
+     * client_id=client_001
      *
      * 응답:
      * {
@@ -238,7 +242,7 @@ public class OAuthController {
             @RequestParam String grant_type,
             @RequestParam(required = false) String code,
             @RequestParam String client_id,
-            @RequestParam String client_secret,
+            @RequestParam(required = false) String client_secret,  // PKCE 사용 시 불필요
             @RequestParam(required = false) String redirect_uri,
             @RequestParam(required = false) String code_verifier,
             @RequestParam(required = false) String refresh_token,
@@ -256,15 +260,14 @@ public class OAuthController {
                     throw new BadCredentialsException("redirect_uri is required for authorization_code grant");
                 }
 
-                // Authorization Code를 Token으로 교환 (PKCE code_verifier 포함, 세션 생성)
+                // Authorization Code를 Token으로 교환
+                tokenResponse = oAuthService.exchangeCodeForToken(
+                        code, client_id, client_secret, redirect_uri, code_verifier, request);
+
                 if (code_verifier != null && !code_verifier.isEmpty()) {
-                    tokenResponse = oAuthService.exchangeCodeForToken(
-                            code, client_id, client_secret, redirect_uri, code_verifier, request);
-                    log.info("Token issued with PKCE and session: client_id={}", client_id);
+                    log.info("Token issued with PKCE (Public Client): client_id={}", client_id);
                 } else {
-                    tokenResponse = oAuthService.exchangeCodeForToken(
-                            code, client_id, client_secret, redirect_uri, null, request);
-                    log.info("Token issued with session: client_id={}", client_id);
+                    log.info("Token issued with client_secret (Confidential Client): client_id={}", client_id);
                 }
 
             } else if ("refresh_token".equals(grant_type)) {

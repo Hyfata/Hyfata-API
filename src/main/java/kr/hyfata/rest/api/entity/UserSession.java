@@ -55,6 +55,10 @@ public class UserSession {
     @Builder.Default
     private Boolean isRevoked = false;
 
+    @Column(name = "pkce_flow", nullable = false)
+    @Builder.Default
+    private Boolean pkceFlow = false;  // PKCE 기반 Public Client 여부
+
     @Column(name = "last_active_at", nullable = false)
     @Builder.Default
     private LocalDateTime lastActiveAt = LocalDateTime.now();

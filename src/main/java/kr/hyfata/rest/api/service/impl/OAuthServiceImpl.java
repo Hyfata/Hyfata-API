@@ -5,6 +5,7 @@ import kr.hyfata.rest.api.dto.OAuthTokenResponse;
 import kr.hyfata.rest.api.entity.AuthorizationCode;
 import kr.hyfata.rest.api.entity.Client;
 import kr.hyfata.rest.api.entity.User;
+import kr.hyfata.rest.api.entity.UserSession;
 import kr.hyfata.rest.api.repository.AuthorizationCodeRepository;
 import kr.hyfata.rest.api.repository.ClientRepository;
 import kr.hyfata.rest.api.repository.UserRepository;
@@ -238,8 +239,11 @@ public class OAuthServiceImpl implements OAuthService {
             throw new BadCredentialsException("Redirect URI mismatch");
         }
 
-        // 5. PKCE 검증 (code_challenge가 저장되어 있으면 code_verifier 필수)
-        if (authCode.getCodeChallenge() != null && !authCode.getCodeChallenge().isEmpty()) {
+        // 5. PKCE 또는 Client Secret 검증
+        boolean isPkceFlow = authCode.getCodeChallenge() != null && !authCode.getCodeChallenge().isEmpty();
+
+        if (isPkceFlow) {
+            // Public Client (PKCE Flow) - code_verifier로 검증, client_secret 불필요
             if (codeVerifier == null || codeVerifier.isEmpty()) {
                 throw new BadCredentialsException("code_verifier is required for PKCE flow");
             }
@@ -256,15 +260,22 @@ public class OAuthServiceImpl implements OAuthService {
             }
 
             log.debug("PKCE verification successful: clientId={}, email={}", clientId, authCode.getEmail());
+        } else {
+            // Confidential Client - client_secret으로 검증
+            if (clientSecret == null || clientSecret.isEmpty()) {
+                throw new BadCredentialsException("client_secret is required for non-PKCE flow");
+            }
         }
 
-        // 6. Client Secret 검증
+        // 6. Client 검증
         Client client = clientRepository.findByClientId(clientId)
-                .orElseThrow(() -> new BadCredentialsException("Invalid client credentials"));
+                .orElseThrow(() -> new BadCredentialsException("Invalid client"));
 
-        // BCrypt로 저장된 clientSecret과 비교
-        if (!passwordEncoder.matches(clientSecret, client.getClientSecret())) {
-            throw new BadCredentialsException("Invalid client credentials");
+        // Confidential Client인 경우 client_secret 검증
+        if (!isPkceFlow) {
+            if (!passwordEncoder.matches(clientSecret, client.getClientSecret())) {
+                throw new BadCredentialsException("Invalid client credentials");
+            }
         }
 
         if (!client.getEnabled()) {
@@ -286,13 +297,13 @@ public class OAuthServiceImpl implements OAuthService {
         String refreshToken = jwtUtil.generateRefreshToken(user);
         long expiresIn = 86400000;  // 24시간
 
-        // 10. 세션 생성
-        sessionService.createSession(user, refreshToken, jti, request);
+        // 10. 세션 생성 (PKCE 여부 저장)
+        sessionService.createSession(user, refreshToken, jti, request, isPkceFlow);
 
-        if (authCode.getCodeChallenge() != null && !authCode.getCodeChallenge().isEmpty()) {
-            log.info("Authorization code exchanged for tokens with session (PKCE): clientId={}, email={}", clientId, authCode.getEmail());
+        if (isPkceFlow) {
+            log.info("Authorization code exchanged for tokens with PKCE (Public Client): clientId={}, email={}", clientId, authCode.getEmail());
         } else {
-            log.info("Authorization code exchanged for tokens with session: clientId={}, email={}", clientId, authCode.getEmail());
+            log.info("Authorization code exchanged for tokens with client_secret (Confidential Client): clientId={}, email={}", clientId, authCode.getEmail());
         }
 
         return OAuthTokenResponse.builder()
@@ -312,51 +323,65 @@ public class OAuthServiceImpl implements OAuthService {
             throw new BadCredentialsException("Invalid refresh token");
         }
 
-        // 2. Client 검증
-        Client client = clientRepository.findByClientId(clientId)
-                .orElseThrow(() -> new BadCredentialsException("Invalid client credentials"));
+        // 2. 세션 유효성 검증 (DB)
+        if (!sessionService.validateSession(refreshToken)) {
+            throw new BadCredentialsException("Session has been revoked");
+        }
 
-        if (!passwordEncoder.matches(clientSecret, client.getClientSecret())) {
-            throw new BadCredentialsException("Invalid client credentials");
+        // 3. 세션에서 PKCE 여부 확인
+        String oldSessionHash = sessionService.hashToken(refreshToken);
+        UserSession oldSession = userSessionRepository.findById(oldSessionHash)
+                .orElseThrow(() -> new BadCredentialsException("Session not found"));
+
+        boolean isPkceFlow = oldSession.getPkceFlow() != null && oldSession.getPkceFlow();
+
+        // 4. Client 검증
+        Client client = clientRepository.findByClientId(clientId)
+                .orElseThrow(() -> new BadCredentialsException("Invalid client"));
+
+        // Confidential Client (PKCE 아님)인 경우 client_secret 검증
+        if (!isPkceFlow) {
+            if (clientSecret == null || clientSecret.isEmpty()) {
+                throw new BadCredentialsException("client_secret is required for non-PKCE session");
+            }
+            if (!passwordEncoder.matches(clientSecret, client.getClientSecret())) {
+                throw new BadCredentialsException("Invalid client credentials");
+            }
         }
 
         if (!client.getEnabled()) {
             throw new BadCredentialsException("Client is disabled");
         }
 
-        // 3. 세션 유효성 검증 (DB)
-        if (!sessionService.validateSession(refreshToken)) {
-            throw new BadCredentialsException("Session has been revoked");
-        }
-
-        // 4. 사용자 조회
+        // 5. 사용자 조회
         String email = jwtUtil.extractEmail(refreshToken);
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new BadCredentialsException("User not found"));
 
-        // 5. 기존 세션에서 이전 Access Token JTI 가져와서 블랙리스트 등록
-        String oldSessionHash = sessionService.hashToken(refreshToken);
-        userSessionRepository.findById(oldSessionHash).ifPresent(session -> {
-            if (session.getAccessTokenJti() != null) {
-                // Access Token 남은 만료 시간 계산 (대략 15분으로 설정)
-                tokenBlacklistService.blacklistJti(session.getAccessTokenJti(), 900);
-            }
-        });
+        // 6. 기존 세션에서 이전 Access Token JTI 가져와서 블랙리스트 등록
+        if (oldSession.getAccessTokenJti() != null) {
+            // Access Token 남은 만료 시간 계산 (대략 15분으로 설정)
+            tokenBlacklistService.blacklistJti(oldSession.getAccessTokenJti(), 900);
+        }
 
-        // 6. 새 토큰 생성 (토큰 로테이션)
+        // 7. 새 토큰 생성 (토큰 로테이션)
         JwtUtil.TokenResult newAccessTokenResult = jwtUtil.generateAccessTokenWithJti(user);
         String newAccessToken = newAccessTokenResult.token();
         String newJti = newAccessTokenResult.jti();
         String newRefreshToken = jwtUtil.generateRefreshToken(user);
         long expiresIn = 86400000;  // 24시간
 
-        // 7. 기존 세션 무효화 (refresh token 해시로 찾아서)
+        // 8. 기존 세션 무효화 (refresh token 해시로 찾아서)
         sessionService.revokeSession(email, oldSessionHash, null);
 
-        // 8. 새 세션 생성
-        sessionService.createSession(user, newRefreshToken, newJti, request);
+        // 9. 새 세션 생성 (PKCE 여부 유지)
+        sessionService.createSession(user, newRefreshToken, newJti, request, isPkceFlow);
 
-        log.info("OAuth token refreshed with session rotation: email={}, clientId={}", email, clientId);
+        if (isPkceFlow) {
+            log.info("OAuth token refreshed (Public Client/PKCE): email={}, clientId={}", email, clientId);
+        } else {
+            log.info("OAuth token refreshed (Confidential Client): email={}, clientId={}", email, clientId);
+        }
 
         return OAuthTokenResponse.builder()
                 .accessToken(newAccessToken)

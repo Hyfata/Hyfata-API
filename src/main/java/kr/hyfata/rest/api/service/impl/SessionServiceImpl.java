@@ -48,6 +48,13 @@ public class SessionServiceImpl implements SessionService {
     @Transactional
     public UserSession createSession(User user, String refreshToken, String accessTokenJti,
                                       HttpServletRequest request) {
+        return createSession(user, refreshToken, accessTokenJti, request, false);
+    }
+
+    @Override
+    @Transactional
+    public UserSession createSession(User user, String refreshToken, String accessTokenJti,
+                                      HttpServletRequest request, boolean isPkceFlow) {
         // 동시 세션 수 확인 및 제한
         enforceSessionLimit(user);
 
@@ -71,6 +78,7 @@ public class SessionServiceImpl implements SessionService {
                 .userAgent(userAgent)
                 .expiresAt(expiresAt)
                 .isRevoked(false)
+                .pkceFlow(isPkceFlow)  // PKCE 기반 Public Client 여부
                 .lastActiveAt(LocalDateTime.now())
                 .createdAt(LocalDateTime.now())
                 .build();

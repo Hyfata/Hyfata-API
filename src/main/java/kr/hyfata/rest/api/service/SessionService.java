@@ -23,6 +23,17 @@ public interface SessionService {
     UserSession createSession(User user, String refreshToken, String accessTokenJti, HttpServletRequest request);
 
     /**
+     * 새 세션 생성 (PKCE 플로우 지정)
+     * @param user 사용자
+     * @param refreshToken Refresh Token (원본)
+     * @param accessTokenJti Access Token의 JTI
+     * @param request HTTP 요청 (IP, User-Agent 추출용)
+     * @param isPkceFlow PKCE 기반 Public Client 여부
+     * @return 생성된 세션
+     */
+    UserSession createSession(User user, String refreshToken, String accessTokenJti, HttpServletRequest request, boolean isPkceFlow);
+
+    /**
      * 사용자의 활성 세션 목록 조회
      * @param userEmail 사용자 이메일
      * @param currentRefreshToken 현재 세션의 Refresh Token (현재 세션 표시용)
