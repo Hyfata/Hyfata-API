@@ -115,16 +115,16 @@ Authorization: Bearer {access_token}
 
 ### Request
 ```http
-PUT /api/agora/teams/1
+PUT /api/agora/teams/1?name=개발팀(수정)&description=백엔드및프론트엔드개발팀&profileImage=https://cdn.hyfata.com/teams/dev-team-updated.jpg
 Authorization: Bearer {access_token}
-Content-Type: application/json
-
-{
-  "name": "개발팀 (수정)",
-  "description": "백엔드 및 프론트엔드 개발 팀",
-  "profileImage": "https://cdn.hyfata.com/teams/dev-team-updated.jpg"
-}
 ```
+
+### Query Parameters
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| name | string | No | 팀 이름 |
+| description | string | No | 팀 설명 |
+| profileImage | string | No | 팀 프로필 이미지 URL |
 
 ### Response 200
 ```json

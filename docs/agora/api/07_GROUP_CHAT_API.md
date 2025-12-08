@@ -158,14 +158,10 @@ Content-Type: application/json
 ### Response 200
 ```json
 {
-  "groupChatId": 101,
+  "chatId": 101,
   "name": "개발팀 채팅",
-  "creatorEmail": "admin@example.com",
-  "memberCount": 3,
-  "members": [
-    { "userId": 100, "email": "admin@example.com", "agoraId": "admin" },
-    { "userId": 101, "email": "john@example.com", "agoraId": "john_doe" }
-  ],
+  "creatorAgoraId": "admin",
+  "memberAgoraIds": ["admin", "john_doe"],
   "createdAt": "2025-01-15T10:30:00"
 }
 ```
@@ -182,14 +178,10 @@ Authorization: Bearer {access_token}
 ### Response 200
 ```json
 {
-  "groupChatId": 101,
+  "chatId": 101,
   "name": "개발팀 채팅",
-  "creatorEmail": "admin@example.com",
-  "memberCount": 3,
-  "members": [
-    { "userId": 100, "email": "admin@example.com", "agoraId": "admin", "role": "admin" },
-    { "userId": 101, "email": "john@example.com", "agoraId": "john_doe", "role": "member" }
-  ],
+  "creatorAgoraId": "admin",
+  "memberAgoraIds": ["admin", "john_doe"],
   "createdAt": "2025-01-15T10:30:00"
 }
 ```
@@ -213,10 +205,11 @@ Content-Type: application/json
 ### Response 200
 ```json
 {
-  "groupChatId": 101,
+  "chatId": 101,
   "name": "개발팀 공용 채팅",
-  "creatorEmail": "admin@example.com",
-  "memberCount": 3,
+  "creatorAgoraId": "admin",
+  "memberAgoraIds": ["admin", "john_doe"],
+  "createdAt": "2025-01-15T10:30:00",
   "updatedAt": "2025-01-15T11:00:00"
 }
 ```
@@ -238,8 +231,12 @@ Content-Type: application/json
 ### Response 200
 ```json
 {
-  "message": "멤버가 추가되었습니다",
-  "addedCount": 2
+  "chatId": 101,
+  "name": "개발팀 채팅",
+  "creatorAgoraId": "admin",
+  "memberAgoraIds": ["admin", "john_doe", "new_user", "another_user"],
+  "createdAt": "2025-01-15T10:30:00",
+  "updatedAt": "2025-01-15T11:30:00"
 }
 ```
 

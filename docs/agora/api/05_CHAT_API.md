@@ -31,11 +31,15 @@ Authorization: Bearer {access_token}
 [
   {
     "chatId": 100,
+    "type": "DIRECT",
+    "name": "홍길동",
+    "profileImage": "https://cdn.hyfata.com/profiles/user123.jpg",
+    "lastMessageContent": "안녕하세요!",
+    "lastMessageSenderName": "홍길동",
+    "lastMessageTime": "2025-01-15T10:30:00",
     "participantCount": 2,
-    "lastMessage": "안녕하세요!",
-    "lastMessageAt": "2025-01-15T10:30:00",
     "isPinned": false,
-    "createdAt": "2025-01-10T15:30:00"
+    "pinnedAt": null
   }
 ]
 ```
@@ -98,33 +102,33 @@ Authorization: Bearer {access_token}
 
 ### Request
 ```http
-GET /api/agora/chats/100/messages?cursorId=999&limit=20
+GET /api/agora/chats/100/messages?cursor=999&limit=20
 Authorization: Bearer {access_token}
 ```
 
 ### Response 200
 ```json
-{
-  "messages": [
-    {
-      "messageId": 999,
-      "senderEmail": "user@example.com",
-      "senderAgoraId": "john_doe",
-      "senderProfileImage": "https://...",
-      "content": "반갑습니다!",
-      "type": "TEXT",
-      "createdAt": "2025-01-15T09:00:00"
-    }
-  ],
-  "hasNext": true,
-  "nextCursor": 980
-}
+[
+  {
+    "messageId": 999,
+    "senderId": 123,
+    "senderAgoraId": "john_doe",
+    "senderName": "홍길동",
+    "senderProfileImage": "https://...",
+    "content": "반갑습니다!",
+    "type": "TEXT",
+    "isDeleted": false,
+    "isPinned": false,
+    "createdAt": "2025-01-15T09:00:00",
+    "updatedAt": "2025-01-15T09:00:00"
+  }
+]
 ```
 
 ### Query Parameters
 | Name | Type | Description |
 |------|------|-------------|
-| cursorId | long | 이전 메시지 ID (페이징 용) |
+| cursor | long | 이전 메시지 ID (페이징 용) |
 | limit | int | 반환할 메시지 수 (기본 20) |
 
 ---
@@ -147,11 +151,16 @@ Content-Type: application/json
 ```json
 {
   "messageId": 1000,
-  "chatId": 100,
-  "senderEmail": "user@example.com",
+  "senderId": 100,
+  "senderAgoraId": "my_agora_id",
+  "senderName": "나",
+  "senderProfileImage": "https://cdn.hyfata.com/profiles/me.jpg",
   "content": "안녕하세요!",
   "type": "TEXT",
-  "createdAt": "2025-01-15T10:35:00"
+  "isDeleted": false,
+  "isPinned": false,
+  "createdAt": "2025-01-15T10:35:00",
+  "updatedAt": "2025-01-15T10:35:00"
 }
 ```
 
