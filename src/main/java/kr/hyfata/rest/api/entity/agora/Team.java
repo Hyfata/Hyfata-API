@@ -63,6 +63,10 @@ public class Team {
     @Builder.Default
     private List<Event> events = new ArrayList<>();
 
+    @OneToMany(mappedBy = "team", cascade = CascadeType.ALL)
+    @Builder.Default
+    private List<Chat> chats = new ArrayList<>();
+
     @Column(nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

@@ -3,8 +3,11 @@ package kr.hyfata.rest.api.controller.agora;
 import kr.hyfata.rest.api.dto.agora.chat.ChatResponse;
 import kr.hyfata.rest.api.dto.agora.chat.ChatListResponse;
 import kr.hyfata.rest.api.dto.agora.chat.CreateChatRequest;
+import kr.hyfata.rest.api.dto.agora.chat.CreateDirectChatRequest;
+import kr.hyfata.rest.api.dto.agora.chat.CreateGroupChatRequest;
 import kr.hyfata.rest.api.dto.agora.chat.MessageDto;
 import kr.hyfata.rest.api.dto.agora.chat.SendMessageRequest;
+import kr.hyfata.rest.api.entity.agora.Chat;
 import kr.hyfata.rest.api.service.agora.AgoraChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -128,5 +131,60 @@ public class AgoraChatController {
         Map<String, String> response = new HashMap<>();
         response.put("message", message);
         return ResponseEntity.ok(response);
+    }
+
+    // ==================== 컨텍스트 기반 새 엔드포인트 ====================
+
+    /**
+     * 1:1 채팅 생성/조회
+     * POST /api/agora/chats/direct
+     */
+    @PostMapping("/direct")
+    public ResponseEntity<ChatResponse> getOrCreateDirectChat(
+            Authentication authentication,
+            @Valid @RequestBody CreateDirectChatRequest request
+    ) {
+        String userEmail = authentication.getName();
+        ChatResponse chat = agoraChatService.getOrCreateDirectChat(userEmail, request);
+        return ResponseEntity.ok(chat);
+    }
+
+    /**
+     * 1:1 채팅 목록 조회 (컨텍스트별)
+     * GET /api/agora/chats/direct?context=FRIEND|TEAM
+     */
+    @GetMapping("/direct")
+    public ResponseEntity<List<ChatResponse>> getDirectChats(
+            Authentication authentication,
+            @RequestParam Chat.ChatContext context
+    ) {
+        String userEmail = authentication.getName();
+        List<ChatResponse> chats = agoraChatService.getDirectChatsByContext(userEmail, context);
+        return ResponseEntity.ok(chats);
+    }
+
+    /**
+     * 그룹 채팅 생성 (친구 그룹 채팅)
+     * POST /api/agora/chats/group
+     */
+    @PostMapping("/group")
+    public ResponseEntity<ChatResponse> createGroupChat(
+            Authentication authentication,
+            @Valid @RequestBody CreateGroupChatRequest request
+    ) {
+        String userEmail = authentication.getName();
+        ChatResponse chat = agoraChatService.createGroupChat(userEmail, request);
+        return ResponseEntity.ok(chat);
+    }
+
+    /**
+     * 그룹 채팅 목록 조회 (친구 그룹 채팅)
+     * GET /api/agora/chats/group
+     */
+    @GetMapping("/group")
+    public ResponseEntity<List<ChatResponse>> getGroupChats(Authentication authentication) {
+        String userEmail = authentication.getName();
+        List<ChatResponse> chats = agoraChatService.getGroupChats(userEmail);
+        return ResponseEntity.ok(chats);
     }
 }

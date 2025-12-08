@@ -1,8 +1,10 @@
 package kr.hyfata.rest.api.controller.agora;
 
+import kr.hyfata.rest.api.dto.agora.chat.ChatResponse;
 import kr.hyfata.rest.api.dto.agora.team.TeamResponse;
 import kr.hyfata.rest.api.dto.agora.team.CreateTeamRequest;
 import kr.hyfata.rest.api.dto.agora.team.TeamMemberResponse;
+import kr.hyfata.rest.api.service.agora.AgoraChatService;
 import kr.hyfata.rest.api.service.agora.AgoraTeamService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +24,7 @@ import java.util.Map;
 public class AgoraTeamController {
 
     private final AgoraTeamService agoraTeamService;
+    private final AgoraChatService agoraChatService;
 
     /**
      * 팀 목록 조회
@@ -160,5 +163,19 @@ public class AgoraTeamController {
         Map<String, String> response = new HashMap<>();
         response.put("message", message);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 팀 그룹 채팅 조회
+     * GET /api/agora/teams/{id}/chat
+     */
+    @GetMapping("/{id}/chat")
+    public ResponseEntity<ChatResponse> getTeamGroupChat(
+            Authentication authentication,
+            @PathVariable Long id
+    ) {
+        String userEmail = authentication.getName();
+        ChatResponse chat = agoraChatService.getTeamGroupChat(id, userEmail);
+        return ResponseEntity.ok(chat);
     }
 }
