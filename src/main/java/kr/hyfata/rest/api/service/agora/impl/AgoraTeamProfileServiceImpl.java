@@ -3,10 +3,8 @@ package kr.hyfata.rest.api.service.agora.impl;
 import kr.hyfata.rest.api.dto.agora.team.TeamProfileResponse;
 import kr.hyfata.rest.api.dto.agora.team.CreateTeamProfileRequest;
 import kr.hyfata.rest.api.entity.User;
-import kr.hyfata.rest.api.entity.agora.Team;
 import kr.hyfata.rest.api.entity.agora.TeamProfile;
 import kr.hyfata.rest.api.repository.UserRepository;
-import kr.hyfata.rest.api.repository.agora.TeamRepository;
 import kr.hyfata.rest.api.repository.agora.TeamProfileRepository;
 import kr.hyfata.rest.api.service.agora.AgoraTeamProfileService;
 import lombok.RequiredArgsConstructor;
@@ -21,20 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class AgoraTeamProfileServiceImpl implements AgoraTeamProfileService {
 
     private final UserRepository userRepository;
-    private final TeamRepository teamRepository;
     private final TeamProfileRepository teamProfileRepository;
 
     @Override
-    public TeamProfileResponse getMyTeamProfile(String userEmail, Long teamId) {
+    public TeamProfileResponse getMyTeamProfile(String userEmail) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
 
-        // Verify user is member
-        if (!isTeamMember(teamId, user.getId())) {
-            throw new IllegalStateException("You are not a member of this team");
-        }
-
-        TeamProfile profile = teamProfileRepository.findByTeamIdAndUserId(teamId, user.getId())
+        TeamProfile profile = teamProfileRepository.findById(user.getId())
                 .orElseThrow(() -> new IllegalStateException("Team profile not found"));
 
         return TeamProfileResponse.from(profile);
@@ -42,22 +33,15 @@ public class AgoraTeamProfileServiceImpl implements AgoraTeamProfileService {
 
     @Override
     @Transactional
-    public TeamProfileResponse createTeamProfile(String userEmail, Long teamId, CreateTeamProfileRequest request) {
+    public TeamProfileResponse createTeamProfile(String userEmail, CreateTeamProfileRequest request) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
-
-        // Verify user is member
-        if (!isTeamMember(teamId, user.getId())) {
-            throw new IllegalStateException("You are not a member of this team");
-        }
 
         // Check if profile already exists
-        if (teamProfileRepository.existsByTeamIdAndUserId(teamId, user.getId())) {
+        if (teamProfileRepository.existsById(user.getId())) {
             throw new IllegalStateException("Team profile already exists");
         }
 
         TeamProfile profile = TeamProfile.builder()
-                .team(team)
                 .user(user)
                 .displayName(request.getDisplayName())
                 .profileImage(request.getProfileImage())
@@ -69,16 +53,10 @@ public class AgoraTeamProfileServiceImpl implements AgoraTeamProfileService {
 
     @Override
     @Transactional
-    public TeamProfileResponse updateTeamProfile(String userEmail, Long teamId, String displayName, String profileImage) {
+    public TeamProfileResponse updateTeamProfile(String userEmail, String displayName, String profileImage, String bio) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
 
-        // Verify user is member
-        if (!isTeamMember(teamId, user.getId())) {
-            throw new IllegalStateException("You are not a member of this team");
-        }
-
-        TeamProfile profile = teamProfileRepository.findByTeamIdAndUserId(teamId, user.getId())
+        TeamProfile profile = teamProfileRepository.findById(user.getId())
                 .orElseThrow(() -> new IllegalStateException("Team profile not found"));
 
         if (displayName != null && !displayName.isEmpty()) {
@@ -89,22 +67,20 @@ public class AgoraTeamProfileServiceImpl implements AgoraTeamProfileService {
             profile.setProfileImage(profileImage);
         }
 
+        if (bio != null) {
+            profile.setBio(bio);
+        }
+
         TeamProfile updated = teamProfileRepository.save(profile);
         return TeamProfileResponse.from(updated);
     }
 
     @Override
     @Transactional
-    public TeamProfileResponse updateTeamProfileImage(String userEmail, Long teamId, String profileImage) {
+    public TeamProfileResponse updateTeamProfileImage(String userEmail, String profileImage) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
 
-        // Verify user is member
-        if (!isTeamMember(teamId, user.getId())) {
-            throw new IllegalStateException("You are not a member of this team");
-        }
-
-        TeamProfile profile = teamProfileRepository.findByTeamIdAndUserId(teamId, user.getId())
+        TeamProfile profile = teamProfileRepository.findById(user.getId())
                 .orElseThrow(() -> new IllegalStateException("Team profile not found"));
 
         if (profileImage != null) {
@@ -116,37 +92,21 @@ public class AgoraTeamProfileServiceImpl implements AgoraTeamProfileService {
     }
 
     @Override
-    public TeamProfileResponse getTeamMemberProfile(Long teamId, Long userId) {
-        Team team = findTeamById(teamId);
-        User user = findUserById(userId);
-
-        // Verify user is member of team
-        if (!isTeamMember(teamId, userId)) {
-            throw new IllegalStateException("User is not a member of this team");
-        }
-
-        TeamProfile profile = teamProfileRepository.findByTeamIdAndUserId(teamId, userId)
+    public TeamProfileResponse getUserTeamProfile(Long userId) {
+        TeamProfile profile = teamProfileRepository.findById(userId)
                 .orElseThrow(() -> new IllegalStateException("Team profile not found"));
 
         return TeamProfileResponse.from(profile);
     }
 
+    @Override
+    public boolean hasTeamProfile(String userEmail) {
+        User user = findUserByEmail(userEmail);
+        return teamProfileRepository.existsById(user.getId());
+    }
+
     private User findUserByEmail(String userEmail) {
         return userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
-    }
-
-    private User findUserById(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-    }
-
-    private Team findTeamById(Long teamId) {
-        return teamRepository.findById(teamId)
-                .orElseThrow(() -> new IllegalArgumentException("Team not found"));
-    }
-
-    private boolean isTeamMember(Long teamId, Long userId) {
-        return teamProfileRepository.existsByTeamIdAndUserId(teamId, userId);
     }
 }

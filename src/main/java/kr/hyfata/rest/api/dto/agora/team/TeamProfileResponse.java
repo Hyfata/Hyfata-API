@@ -14,10 +14,6 @@ import java.time.LocalDateTime;
 @Builder
 public class TeamProfileResponse {
 
-    private Long profileId;
-
-    private Long teamId;
-
     private Long userId;
 
     private String userEmail;
@@ -26,18 +22,19 @@ public class TeamProfileResponse {
 
     private String profileImage;
 
+    private String bio;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
 
     public static TeamProfileResponse from(TeamProfile profile) {
         return TeamProfileResponse.builder()
-                .profileId(profile.getId())
-                .teamId(profile.getTeam().getId())
                 .userId(profile.getUser().getId())
                 .userEmail(profile.getUser().getEmail())
                 .displayName(profile.getDisplayName())
                 .profileImage(profile.getProfileImage())
+                .bio(profile.getBio())
                 .createdAt(profile.getCreatedAt())
                 .updatedAt(profile.getUpdatedAt())
                 .build();

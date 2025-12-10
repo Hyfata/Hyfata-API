@@ -10,9 +10,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.util.Map;
 
 @RestController
-@RequestMapping("/api/agora/teams/{teamId}/profile")
+@RequestMapping("/api/agora/team-profile")
 @RequiredArgsConstructor
 @Slf4j
 public class AgoraTeamProfileController {
@@ -21,74 +22,77 @@ public class AgoraTeamProfileController {
 
     /**
      * 내 팀 프로필 조회
-     * GET /api/agora/teams/{teamId}/profile
+     * GET /api/agora/team-profile
      */
     @GetMapping
-    public ResponseEntity<TeamProfileResponse> getMyTeamProfile(
-            Authentication authentication,
-            @PathVariable Long teamId
-    ) {
+    public ResponseEntity<TeamProfileResponse> getMyTeamProfile(Authentication authentication) {
         String userEmail = authentication.getName();
-        TeamProfileResponse profile = agoraTeamProfileService.getMyTeamProfile(userEmail, teamId);
+        TeamProfileResponse profile = agoraTeamProfileService.getMyTeamProfile(userEmail);
         return ResponseEntity.ok(profile);
     }
 
     /**
      * 팀 프로필 생성
-     * POST /api/agora/teams/{teamId}/profile
+     * POST /api/agora/team-profile
      */
     @PostMapping
     public ResponseEntity<TeamProfileResponse> createTeamProfile(
             Authentication authentication,
-            @PathVariable Long teamId,
             @Valid @RequestBody CreateTeamProfileRequest request
     ) {
         String userEmail = authentication.getName();
-        TeamProfileResponse profile = agoraTeamProfileService.createTeamProfile(userEmail, teamId, request);
+        TeamProfileResponse profile = agoraTeamProfileService.createTeamProfile(userEmail, request);
         return ResponseEntity.ok(profile);
     }
 
     /**
      * 팀 프로필 수정
-     * PUT /api/agora/teams/{teamId}/profile
+     * PUT /api/agora/team-profile
      */
     @PutMapping
     public ResponseEntity<TeamProfileResponse> updateTeamProfile(
             Authentication authentication,
-            @PathVariable Long teamId,
             @RequestParam(required = false) String displayName,
-            @RequestParam(required = false) String profileImage
+            @RequestParam(required = false) String profileImage,
+            @RequestParam(required = false) String bio
     ) {
         String userEmail = authentication.getName();
-        TeamProfileResponse profile = agoraTeamProfileService.updateTeamProfile(userEmail, teamId, displayName, profileImage);
+        TeamProfileResponse profile = agoraTeamProfileService.updateTeamProfile(userEmail, displayName, profileImage, bio);
         return ResponseEntity.ok(profile);
     }
 
     /**
      * 팀 프로필 이미지 변경
-     * PUT /api/agora/teams/{teamId}/profile/image
+     * PUT /api/agora/team-profile/image
      */
     @PutMapping("/image")
     public ResponseEntity<TeamProfileResponse> updateTeamProfileImage(
             Authentication authentication,
-            @PathVariable Long teamId,
             @RequestParam String profileImage
     ) {
         String userEmail = authentication.getName();
-        TeamProfileResponse profile = agoraTeamProfileService.updateTeamProfileImage(userEmail, teamId, profileImage);
+        TeamProfileResponse profile = agoraTeamProfileService.updateTeamProfileImage(userEmail, profileImage);
         return ResponseEntity.ok(profile);
     }
 
     /**
-     * 타 팀원 프로필 조회
-     * GET /api/agora/teams/{teamId}/members/{userId}/profile
+     * 특정 사용자의 팀 프로필 조회
+     * GET /api/agora/team-profile/users/{userId}
      */
-    @GetMapping("/members/{userId}")
-    public ResponseEntity<TeamProfileResponse> getTeamMemberProfile(
-            @PathVariable Long teamId,
-            @PathVariable Long userId
-    ) {
-        TeamProfileResponse profile = agoraTeamProfileService.getTeamMemberProfile(teamId, userId);
+    @GetMapping("/users/{userId}")
+    public ResponseEntity<TeamProfileResponse> getUserTeamProfile(@PathVariable Long userId) {
+        TeamProfileResponse profile = agoraTeamProfileService.getUserTeamProfile(userId);
         return ResponseEntity.ok(profile);
+    }
+
+    /**
+     * 팀 프로필 존재 여부 확인
+     * GET /api/agora/team-profile/exists
+     */
+    @GetMapping("/exists")
+    public ResponseEntity<Map<String, Boolean>> hasTeamProfile(Authentication authentication) {
+        String userEmail = authentication.getName();
+        boolean exists = agoraTeamProfileService.hasTeamProfile(userEmail);
+        return ResponseEntity.ok(Map.of("exists", exists));
     }
 }

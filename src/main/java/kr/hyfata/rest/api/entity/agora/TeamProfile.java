@@ -9,16 +9,12 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * 팀 프로필 - 사용자당 1개의 팀 프로필
+ * 팀 컨텍스트에서 사용되는 프로필 (AgoraUserProfile은 친구 컨텍스트용)
+ */
 @Entity
-@Table(name = "team_profiles",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"team_id", "user_id"})
-        },
-        indexes = {
-                @Index(name = "idx_team_profiles_team_id", columnList = "team_id"),
-                @Index(name = "idx_team_profiles_user_id", columnList = "user_id"),
-                @Index(name = "idx_team_profiles_team_user", columnList = "team_id,user_id")
-        })
+@Table(name = "team_profiles")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -26,15 +22,11 @@ import java.time.LocalDateTime;
 public class TeamProfile {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "team_id", nullable = false)
-    private Team team;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @OneToOne(fetch = FetchType.LAZY)
+    @MapsId
+    @JoinColumn(name = "id")
     private User user;
 
     @Column(nullable = false, length = 100)
@@ -42,6 +34,9 @@ public class TeamProfile {
 
     @Column(columnDefinition = "TEXT")
     private String profileImage;
+
+    @Column(columnDefinition = "TEXT")
+    private String bio;
 
     @Column(nullable = false, updatable = false)
     @Builder.Default

@@ -9,7 +9,7 @@ Agora 모듈 23개 Entity의 ERD (도메인별 분리)
 ```mermaid
 erDiagram
     User ||--|| AgoraUserProfile : has
-    AgoraUserProfile ||--o| TeamProfile : has
+    User ||--|| TeamProfile : has
 
     AgoraUserProfile {
         Long id PK
@@ -25,6 +25,7 @@ erDiagram
         Long id PK
         String displayName
         String profileImage
+        String bio
     }
 
     User ||--|| UserSettings : has
@@ -42,6 +43,16 @@ erDiagram
         Boolean showOnlineStatus
     }
 ```
+
+### 프로필 구조 설명
+
+- **AgoraUserProfile**: 개인 프로필 (친구 컨텍스트에서 사용)
+  - User와 1:1 관계
+  - agoraId로 다른 사용자를 검색/식별
+
+- **TeamProfile**: 팀 프로필 (팀 컨텍스트에서 사용)
+  - User와 1:1 관계
+  - 팀 채팅, 팀 활동 시 표시되는 프로필
 
 ---
 

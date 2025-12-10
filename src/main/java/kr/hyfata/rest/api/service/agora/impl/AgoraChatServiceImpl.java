@@ -517,9 +517,7 @@ public class AgoraChatServiceImpl implements AgoraChatService {
                         displayImage = null;
                     }
                 } else { // TEAM context
-                    TeamProfile profile = teamProfileRepository
-                            .findByTeamIdAndUserId(chat.getTeam().getId(), otherUserId)
-                            .orElse(null);
+                    TeamProfile profile = teamProfileRepository.findById(otherUserId).orElse(null);
                     if (profile != null) {
                         displayName = profile.getDisplayName();
                         displayImage = profile.getProfileImage();
@@ -586,9 +584,7 @@ public class AgoraChatServiceImpl implements AgoraChatService {
                         .build();
             }
         } else { // TEAM context
-            TeamProfile profile = teamProfileRepository
-                    .findByTeamIdAndUserId(chat.getTeam().getId(), userId)
-                    .orElse(null);
+            TeamProfile profile = teamProfileRepository.findById(userId).orElse(null);
             if (profile != null) {
                 return ParticipantProfile.builder()
                         .userId(userId)
