@@ -3,6 +3,7 @@ package kr.hyfata.rest.api.service.agora;
 import kr.hyfata.rest.api.dto.agora.team.TeamResponse;
 import kr.hyfata.rest.api.dto.agora.team.CreateTeamRequest;
 import kr.hyfata.rest.api.dto.agora.team.TeamMemberResponse;
+import kr.hyfata.rest.api.dto.agora.team.TeamInvitationResponse;
 
 import java.util.List;
 
@@ -20,9 +21,18 @@ public interface AgoraTeamService {
 
     List<TeamMemberResponse> getTeamMembers(String userEmail, Long teamId);
 
-    TeamMemberResponse inviteMember(String userEmail, Long teamId, String targetUserEmail);
-
     String removeMember(String userEmail, Long teamId, Long memberId);
 
     String changeMemberRole(String userEmail, Long teamId, Long memberId, String roleName);
+
+    // Team Invitation methods
+    TeamInvitationResponse sendInvitation(String userEmail, Long teamId, String targetAgoraId);
+
+    TeamInvitationResponse acceptInvitation(String userEmail, Long invitationId);
+
+    TeamInvitationResponse rejectInvitation(String userEmail, Long invitationId);
+
+    List<TeamInvitationResponse> getReceivedInvitations(String userEmail);
+
+    List<TeamInvitationResponse> getSentInvitations(String userEmail, Long teamId);
 }

@@ -4,6 +4,8 @@ import kr.hyfata.rest.api.dto.agora.chat.ChatResponse;
 import kr.hyfata.rest.api.dto.agora.team.TeamResponse;
 import kr.hyfata.rest.api.dto.agora.team.CreateTeamRequest;
 import kr.hyfata.rest.api.dto.agora.team.TeamMemberResponse;
+import kr.hyfata.rest.api.dto.agora.team.SendTeamInvitationRequest;
+import kr.hyfata.rest.api.dto.agora.team.TeamInvitationResponse;
 import kr.hyfata.rest.api.service.agora.AgoraChatService;
 import kr.hyfata.rest.api.service.agora.AgoraTeamService;
 import lombok.RequiredArgsConstructor;
@@ -114,18 +116,73 @@ public class AgoraTeamController {
     }
 
     /**
-     * 팀원 초대
-     * POST /api/agora/teams/{id}/members
+     * 팀원 초대 (agoraId 사용)
+     * POST /api/agora/teams/{id}/invitations
      */
-    @PostMapping("/{id}/members")
-    public ResponseEntity<TeamMemberResponse> inviteMember(
+    @PostMapping("/{id}/invitations")
+    public ResponseEntity<TeamInvitationResponse> sendInvitation(
             Authentication authentication,
             @PathVariable Long id,
-            @RequestParam String userEmail
+            @Valid @RequestBody SendTeamInvitationRequest request
     ) {
-        String requesterEmail = authentication.getName();
-        TeamMemberResponse member = agoraTeamService.inviteMember(requesterEmail, id, userEmail);
-        return ResponseEntity.ok(member);
+        String userEmail = authentication.getName();
+        TeamInvitationResponse invitation = agoraTeamService.sendInvitation(userEmail, id, request.getAgoraId());
+        return ResponseEntity.ok(invitation);
+    }
+
+    /**
+     * 팀 초대 수락
+     * POST /api/agora/teams/invitations/{invitationId}/accept
+     */
+    @PostMapping("/invitations/{invitationId}/accept")
+    public ResponseEntity<TeamInvitationResponse> acceptInvitation(
+            Authentication authentication,
+            @PathVariable Long invitationId
+    ) {
+        String userEmail = authentication.getName();
+        TeamInvitationResponse invitation = agoraTeamService.acceptInvitation(userEmail, invitationId);
+        return ResponseEntity.ok(invitation);
+    }
+
+    /**
+     * 팀 초대 거절
+     * POST /api/agora/teams/invitations/{invitationId}/reject
+     */
+    @PostMapping("/invitations/{invitationId}/reject")
+    public ResponseEntity<TeamInvitationResponse> rejectInvitation(
+            Authentication authentication,
+            @PathVariable Long invitationId
+    ) {
+        String userEmail = authentication.getName();
+        TeamInvitationResponse invitation = agoraTeamService.rejectInvitation(userEmail, invitationId);
+        return ResponseEntity.ok(invitation);
+    }
+
+    /**
+     * 받은 팀 초대 목록 조회
+     * GET /api/agora/teams/invitations/received
+     */
+    @GetMapping("/invitations/received")
+    public ResponseEntity<List<TeamInvitationResponse>> getReceivedInvitations(
+            Authentication authentication
+    ) {
+        String userEmail = authentication.getName();
+        List<TeamInvitationResponse> invitations = agoraTeamService.getReceivedInvitations(userEmail);
+        return ResponseEntity.ok(invitations);
+    }
+
+    /**
+     * 보낸 팀 초대 목록 조회
+     * GET /api/agora/teams/{id}/invitations
+     */
+    @GetMapping("/{id}/invitations")
+    public ResponseEntity<List<TeamInvitationResponse>> getSentInvitations(
+            Authentication authentication,
+            @PathVariable Long id
+    ) {
+        String userEmail = authentication.getName();
+        List<TeamInvitationResponse> invitations = agoraTeamService.getSentInvitations(userEmail, id);
+        return ResponseEntity.ok(invitations);
     }
 
     /**

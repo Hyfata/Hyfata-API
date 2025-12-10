@@ -3,14 +3,11 @@ package kr.hyfata.rest.api.service.agora.impl;
 import kr.hyfata.rest.api.dto.agora.team.TeamResponse;
 import kr.hyfata.rest.api.dto.agora.team.CreateTeamRequest;
 import kr.hyfata.rest.api.dto.agora.team.TeamMemberResponse;
+import kr.hyfata.rest.api.dto.agora.team.TeamInvitationResponse;
 import kr.hyfata.rest.api.entity.User;
-import kr.hyfata.rest.api.entity.agora.Team;
-import kr.hyfata.rest.api.entity.agora.TeamMember;
-import kr.hyfata.rest.api.entity.agora.TeamRole;
+import kr.hyfata.rest.api.entity.agora.*;
 import kr.hyfata.rest.api.repository.UserRepository;
-import kr.hyfata.rest.api.repository.agora.TeamRepository;
-import kr.hyfata.rest.api.repository.agora.TeamMemberRepository;
-import kr.hyfata.rest.api.repository.agora.TeamRoleRepository;
+import kr.hyfata.rest.api.repository.agora.*;
 import kr.hyfata.rest.api.service.agora.AgoraTeamService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +27,9 @@ public class AgoraTeamServiceImpl implements AgoraTeamService {
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final TeamRoleRepository teamRoleRepository;
+    private final AgoraUserProfileRepository agoraUserProfileRepository;
+    private final TeamProfileRepository teamProfileRepository;
+    private final TeamInvitationRepository teamInvitationRepository;
 
     @Override
     public List<TeamResponse> getTeamList(String userEmail) {
@@ -144,15 +144,23 @@ public class AgoraTeamServiceImpl implements AgoraTeamService {
 
         List<TeamMember> members = teamMemberRepository.findByTeam_IdOrderByJoinedAtAsc(teamId);
         return members.stream()
-                .map(TeamMemberResponse::from)
+                .map(member -> {
+                    AgoraUserProfile agoraProfile = agoraUserProfileRepository.findById(member.getUser().getId()).orElse(null);
+                    TeamProfile teamProfile = teamProfileRepository.findByUser_Id(member.getUser().getId()).orElse(null);
+                    return TeamMemberResponse.from(member, agoraProfile, teamProfile);
+                })
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional
-    public TeamMemberResponse inviteMember(String userEmail, Long teamId, String targetUserEmail) {
+    public TeamInvitationResponse sendInvitation(String userEmail, Long teamId, String targetAgoraId) {
         User inviter = findUserByEmail(userEmail);
-        User targetUser = findUserByEmail(targetUserEmail);
+
+        // Find target user by agoraId
+        AgoraUserProfile targetAgoraProfile = agoraUserProfileRepository.findByAgoraId(targetAgoraId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found with agoraId: " + targetAgoraId));
+        User targetUser = targetAgoraProfile.getUser();
 
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new IllegalArgumentException("Team not found"));
@@ -167,8 +175,54 @@ public class AgoraTeamServiceImpl implements AgoraTeamService {
             throw new IllegalStateException("User is already a member of this team");
         }
 
+        // Check if invitation already sent
+        if (teamInvitationRepository.existsByTeam_IdAndToUser_IdAndStatus(teamId, targetUser.getId(), TeamInvitation.Status.PENDING)) {
+            throw new IllegalStateException("Invitation already sent");
+        }
+
+        // Create team invitation
+        TeamInvitation invitation = TeamInvitation.builder()
+                .team(team)
+                .fromUser(inviter)
+                .toUser(targetUser)
+                .status(TeamInvitation.Status.PENDING)
+                .build();
+
+        TeamInvitation saved = teamInvitationRepository.save(invitation);
+
+        // Get profiles for response
+        AgoraUserProfile fromAgoraProfile = agoraUserProfileRepository.findById(inviter.getId()).orElse(null);
+        TeamProfile fromTeamProfile = teamProfileRepository.findByUser_Id(inviter.getId()).orElse(null);
+        TeamProfile toTeamProfile = teamProfileRepository.findByUser_Id(targetUser.getId()).orElse(null);
+
+        return TeamInvitationResponse.from(saved, fromAgoraProfile, fromTeamProfile, targetAgoraProfile, toTeamProfile);
+    }
+
+    @Override
+    @Transactional
+    public TeamInvitationResponse acceptInvitation(String userEmail, Long invitationId) {
+        User user = findUserByEmail(userEmail);
+
+        TeamInvitation invitation = teamInvitationRepository.findById(invitationId)
+                .orElseThrow(() -> new IllegalArgumentException("Invitation not found"));
+
+        // Verify user is the invited one
+        if (!invitation.getToUser().getId().equals(user.getId())) {
+            throw new IllegalStateException("Only the invited user can accept/reject");
+        }
+
+        // Check if already accepted or rejected
+        if (invitation.getStatus() != TeamInvitation.Status.PENDING) {
+            throw new IllegalStateException("Invitation already " + invitation.getStatus().toString().toLowerCase());
+        }
+
+        // Check TeamProfile exists
+        TeamProfile teamProfile = teamProfileRepository.findByUser_Id(user.getId())
+                .orElseThrow(() -> new IllegalStateException("TeamProfile is required to join a team"));
+
         // Create default MEMBER role if not exists
-        TeamRole memberRole = teamRoleRepository.findByTeam_IdAndName(teamId, "member")
+        Team team = invitation.getTeam();
+        TeamRole memberRole = teamRoleRepository.findByTeam_IdAndName(team.getId(), "member")
                 .orElseGet(() -> {
                     TeamRole role = TeamRole.builder()
                             .team(team)
@@ -178,14 +232,95 @@ public class AgoraTeamServiceImpl implements AgoraTeamService {
                     return teamRoleRepository.save(role);
                 });
 
+        // Add user as team member
         TeamMember newMember = TeamMember.builder()
                 .team(team)
-                .user(targetUser)
+                .user(user)
                 .role(memberRole)
                 .build();
+        teamMemberRepository.save(newMember);
 
-        TeamMember saved = teamMemberRepository.save(newMember);
-        return TeamMemberResponse.from(saved);
+        // Update invitation status
+        invitation.setStatus(TeamInvitation.Status.ACCEPTED);
+        TeamInvitation updated = teamInvitationRepository.save(invitation);
+
+        // Get profiles for response
+        AgoraUserProfile fromAgoraProfile = agoraUserProfileRepository.findById(invitation.getFromUser().getId()).orElse(null);
+        TeamProfile fromTeamProfile = teamProfileRepository.findByUser_Id(invitation.getFromUser().getId()).orElse(null);
+        AgoraUserProfile toAgoraProfile = agoraUserProfileRepository.findById(user.getId()).orElse(null);
+
+        return TeamInvitationResponse.from(updated, fromAgoraProfile, fromTeamProfile, toAgoraProfile, teamProfile);
+    }
+
+    @Override
+    @Transactional
+    public TeamInvitationResponse rejectInvitation(String userEmail, Long invitationId) {
+        User user = findUserByEmail(userEmail);
+
+        TeamInvitation invitation = teamInvitationRepository.findById(invitationId)
+                .orElseThrow(() -> new IllegalArgumentException("Invitation not found"));
+
+        // Verify user is the invited one
+        if (!invitation.getToUser().getId().equals(user.getId())) {
+            throw new IllegalStateException("Only the invited user can accept/reject");
+        }
+
+        // Check if already accepted or rejected
+        if (invitation.getStatus() != TeamInvitation.Status.PENDING) {
+            throw new IllegalStateException("Invitation already " + invitation.getStatus().toString().toLowerCase());
+        }
+
+        // Update invitation status
+        invitation.setStatus(TeamInvitation.Status.REJECTED);
+        TeamInvitation updated = teamInvitationRepository.save(invitation);
+
+        // Get profiles for response
+        AgoraUserProfile fromAgoraProfile = agoraUserProfileRepository.findById(invitation.getFromUser().getId()).orElse(null);
+        TeamProfile fromTeamProfile = teamProfileRepository.findByUser_Id(invitation.getFromUser().getId()).orElse(null);
+        AgoraUserProfile toAgoraProfile = agoraUserProfileRepository.findById(user.getId()).orElse(null);
+        TeamProfile toTeamProfile = teamProfileRepository.findByUser_Id(user.getId()).orElse(null);
+
+        return TeamInvitationResponse.from(updated, fromAgoraProfile, fromTeamProfile, toAgoraProfile, toTeamProfile);
+    }
+
+    @Override
+    public List<TeamInvitationResponse> getReceivedInvitations(String userEmail) {
+        User user = findUserByEmail(userEmail);
+
+        List<TeamInvitation> invitations = teamInvitationRepository.findByToUser_IdOrderByCreatedAtDesc(user.getId());
+        return invitations.stream()
+                .map(invitation -> {
+                    AgoraUserProfile fromAgoraProfile = agoraUserProfileRepository.findById(invitation.getFromUser().getId()).orElse(null);
+                    TeamProfile fromTeamProfile = teamProfileRepository.findByUser_Id(invitation.getFromUser().getId()).orElse(null);
+                    AgoraUserProfile toAgoraProfile = agoraUserProfileRepository.findById(user.getId()).orElse(null);
+                    TeamProfile toTeamProfile = teamProfileRepository.findByUser_Id(user.getId()).orElse(null);
+                    return TeamInvitationResponse.from(invitation, fromAgoraProfile, fromTeamProfile, toAgoraProfile, toTeamProfile);
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<TeamInvitationResponse> getSentInvitations(String userEmail, Long teamId) {
+        User user = findUserByEmail(userEmail);
+
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new IllegalArgumentException("Team not found"));
+
+        // Verify user is creator
+        if (!team.getCreatedBy().getId().equals(user.getId())) {
+            throw new IllegalStateException("Only team creator can view sent invitations");
+        }
+
+        List<TeamInvitation> invitations = teamInvitationRepository.findByTeam_IdOrderByCreatedAtDesc(teamId);
+        return invitations.stream()
+                .map(invitation -> {
+                    AgoraUserProfile fromAgoraProfile = agoraUserProfileRepository.findById(user.getId()).orElse(null);
+                    TeamProfile fromTeamProfile = teamProfileRepository.findByUser_Id(user.getId()).orElse(null);
+                    AgoraUserProfile toAgoraProfile = agoraUserProfileRepository.findById(invitation.getToUser().getId()).orElse(null);
+                    TeamProfile toTeamProfile = teamProfileRepository.findByUser_Id(invitation.getToUser().getId()).orElse(null);
+                    return TeamInvitationResponse.from(invitation, fromAgoraProfile, fromTeamProfile, toAgoraProfile, toTeamProfile);
+                })
+                .collect(Collectors.toList());
     }
 
     @Override
