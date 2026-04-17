@@ -1,15 +1,15 @@
 package kr.hyfata.rest.api.service;
 
-import kr.hyfata.rest.api.dto.UserSessionDTO;
-import kr.hyfata.rest.api.entity.User;
-import kr.hyfata.rest.api.entity.UserSession;
-import kr.hyfata.rest.api.repository.UserRepository;
-import kr.hyfata.rest.api.repository.UserSessionRepository;
-import kr.hyfata.rest.api.service.impl.SessionServiceImpl;
-import kr.hyfata.rest.api.util.DeviceDetector;
-import kr.hyfata.rest.api.util.GeoIpService;
-import kr.hyfata.rest.api.util.IpUtil;
-import kr.hyfata.rest.api.util.JwtUtil;
+import kr.hyfata.rest.api.auth.dto.UserSessionDTO;
+import kr.hyfata.rest.api.auth.entity.User;
+import kr.hyfata.rest.api.auth.entity.UserSession;
+import kr.hyfata.rest.api.auth.repository.UserRepository;
+import kr.hyfata.rest.api.auth.repository.UserSessionRepository;
+import kr.hyfata.rest.api.auth.service.impl.SessionServiceImpl;
+import kr.hyfata.rest.api.common.util.DeviceDetector;
+import kr.hyfata.rest.api.common.util.GeoIpService;
+import kr.hyfata.rest.api.common.util.IpUtil;
+import kr.hyfata.rest.api.common.util.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
