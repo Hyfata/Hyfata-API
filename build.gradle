@@ -53,8 +53,6 @@ dependencies {
     // 이미지 처리 (썸네일)
     implementation 'net.coobird:thumbnailator:0.4.20'
 
-    // Firebase (푸시 알림)
-    implementation 'com.google.firebase:firebase-admin:9.2.0'
 
     compileOnly 'org.projectlombok:lombok'
     runtimeOnly 'org.postgresql:postgresql'
@@ -62,6 +60,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly 'com.h2database:h2'
 }
 
 tasks.named('test') {

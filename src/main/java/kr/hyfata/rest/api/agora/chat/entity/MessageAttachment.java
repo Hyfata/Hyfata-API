@@ -1,6 +1,7 @@
 package kr.hyfata.rest.api.agora.chat.entity;
 
 import jakarta.persistence.*;
+import kr.hyfata.rest.api.agora.file.entity.AgoraFile;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

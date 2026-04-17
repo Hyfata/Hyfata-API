@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.friend.repository;
 
-import kr.hyfata.rest.api.entity.agora.FriendRequest;
+import kr.hyfata.rest.api.agora.friend.entity.FriendRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

@@ -1,8 +1,8 @@
 package kr.hyfata.rest.api.agora.chat.service;
 
-import kr.hyfata.rest.api.auth.dto.agora.chat.GroupChatResponse;
-import kr.hyfata.rest.api.auth.dto.agora.chat.CreateGroupChatRequest;
-import kr.hyfata.rest.api.auth.dto.agora.chat.InviteMembersRequest;
+import kr.hyfata.rest.api.agora.chat.dto.GroupChatResponse;
+import kr.hyfata.rest.api.agora.chat.dto.CreateGroupChatRequest;
+import kr.hyfata.rest.api.agora.chat.dto.InviteMembersRequest;
 
 public interface AgoraGroupChatService {
 

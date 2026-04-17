@@ -1,7 +1,7 @@
 package kr.hyfata.rest.api.agora.team.service;
 
-import kr.hyfata.rest.api.auth.dto.agora.team.TeamProfileResponse;
-import kr.hyfata.rest.api.auth.dto.agora.team.CreateTeamProfileRequest;
+import kr.hyfata.rest.api.agora.team.dto.TeamProfileResponse;
+import kr.hyfata.rest.api.agora.team.dto.CreateTeamProfileRequest;
 
 public interface AgoraTeamProfileService {
 

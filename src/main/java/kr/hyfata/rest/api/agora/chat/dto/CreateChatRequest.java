@@ -1,4 +1,4 @@
-package kr.hyfata.rest.api.dto.agora.chat;
+package kr.hyfata.rest.api.agora.chat.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

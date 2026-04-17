@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.chat.repository;
 
-import kr.hyfata.rest.api.entity.agora.ChatParticipant;
+import kr.hyfata.rest.api.agora.chat.entity.ChatParticipant;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

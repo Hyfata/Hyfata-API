@@ -1,17 +1,17 @@
 package kr.hyfata.rest.api.agora.friend.service.impl;
 
-import kr.hyfata.rest.api.auth.dto.agora.friend.FriendRequestResponse;
-import kr.hyfata.rest.api.auth.dto.agora.friend.FriendResponse;
+import kr.hyfata.rest.api.agora.friend.dto.FriendRequestResponse;
+import kr.hyfata.rest.api.agora.friend.dto.FriendResponse;
 import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.entity.agora.AgoraUserProfile;
-import kr.hyfata.rest.api.entity.agora.BlockedUser;
-import kr.hyfata.rest.api.agora.friend.entity.Friend
-import kr.hyfata.rest.api.entity.agora.FriendRequest;
+import kr.hyfata.rest.api.agora.profile.entity.AgoraUserProfile;
+import kr.hyfata.rest.api.agora.friend.entity.BlockedUser;
+import kr.hyfata.rest.api.agora.friend.entity.Friend;
+import kr.hyfata.rest.api.agora.friend.entity.FriendRequest;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
-import kr.hyfata.rest.api.repository.agora.AgoraUserProfileRepository;
-import kr.hyfata.rest.api.repository.agora.BlockedUserRepository;
+import kr.hyfata.rest.api.agora.profile.repository.AgoraUserProfileRepository;
+import kr.hyfata.rest.api.agora.friend.repository.BlockedUserRepository;
 import kr.hyfata.rest.api.agora.friend.repository.FriendRepository;
-import kr.hyfata.rest.api.repository.agora.FriendRequestRepository;
+import kr.hyfata.rest.api.agora.friend.repository.FriendRequestRepository;
 import kr.hyfata.rest.api.agora.friend.service.AgoraFriendService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.file.repository;
 
-import kr.hyfata.rest.api.entity.agora.AgoraFile;
+import kr.hyfata.rest.api.agora.file.entity.AgoraFile;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

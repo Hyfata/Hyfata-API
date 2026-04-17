@@ -1,8 +1,8 @@
 package kr.hyfata.rest.api.agora.team.service;
 
-import kr.hyfata.rest.api.auth.dto.agora.team.EventResponse;
-import kr.hyfata.rest.api.auth.dto.agora.team.CreateEventRequest;
-import kr.hyfata.rest.api.auth.dto.agora.team.UpdateEventRequest;
+import kr.hyfata.rest.api.agora.team.dto.EventResponse;
+import kr.hyfata.rest.api.agora.team.dto.CreateEventRequest;
+import kr.hyfata.rest.api.agora.team.dto.UpdateEventRequest;
 
 import java.util.List;
 

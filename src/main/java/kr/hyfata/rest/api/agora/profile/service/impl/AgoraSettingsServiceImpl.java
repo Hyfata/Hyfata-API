@@ -1,14 +1,14 @@
 package kr.hyfata.rest.api.agora.profile.service.impl;
 
-import kr.hyfata.rest.api.auth.dto.agora.settings.NotificationSettingsResponse;
-import kr.hyfata.rest.api.auth.dto.agora.settings.PrivacySettingsResponse;
-import kr.hyfata.rest.api.auth.dto.agora.settings.UpdateNotificationSettingsRequest;
-import kr.hyfata.rest.api.auth.dto.agora.settings.UpdatePrivacySettingsRequest;
-import kr.hyfata.rest.api.auth.dto.agora.settings.UpdateBirthdayReminderRequest;
+import kr.hyfata.rest.api.agora.profile.dto.NotificationSettingsResponse;
+import kr.hyfata.rest.api.agora.profile.dto.PrivacySettingsResponse;
+import kr.hyfata.rest.api.agora.profile.dto.UpdateNotificationSettingsRequest;
+import kr.hyfata.rest.api.agora.profile.dto.UpdatePrivacySettingsRequest;
+import kr.hyfata.rest.api.agora.profile.dto.UpdateBirthdayReminderRequest;
 import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.entity.agora.UserSettings;
+import kr.hyfata.rest.api.agora.profile.entity.UserSettings;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
-import kr.hyfata.rest.api.repository.agora.UserSettingsRepository;
+import kr.hyfata.rest.api.agora.profile.repository.UserSettingsRepository;
 import kr.hyfata.rest.api.agora.profile.service.AgoraSettingsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

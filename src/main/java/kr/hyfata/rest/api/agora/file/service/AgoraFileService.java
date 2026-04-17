@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.file.service;
 
-import kr.hyfata.rest.api.auth.dto.agora.FileUploadResponse;
+import kr.hyfata.rest.api.agora.file.dto.FileUploadResponse;
 import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
 

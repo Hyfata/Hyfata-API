@@ -1,4 +1,4 @@
-package kr.hyfata.rest.api.common.scheduler;
+package kr.hyfata.rest.api.auth.scheduler;
 
 import kr.hyfata.rest.api.auth.repository.AuthorizationCodeRepository;
 import lombok.RequiredArgsConstructor;

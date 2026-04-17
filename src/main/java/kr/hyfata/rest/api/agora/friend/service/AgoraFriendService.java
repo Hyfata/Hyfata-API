@@ -1,7 +1,7 @@
 package kr.hyfata.rest.api.agora.friend.service;
 
-import kr.hyfata.rest.api.auth.dto.agora.friend.FriendRequestResponse;
-import kr.hyfata.rest.api.auth.dto.agora.friend.FriendResponse;
+import kr.hyfata.rest.api.agora.friend.dto.FriendRequestResponse;
+import kr.hyfata.rest.api.agora.friend.dto.FriendResponse;
 
 import java.util.List;
 

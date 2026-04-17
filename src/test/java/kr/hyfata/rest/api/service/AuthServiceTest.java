@@ -2,6 +2,7 @@ package kr.hyfata.rest.api.service;
 
 import kr.hyfata.rest.api.auth.entity.User;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
+import kr.hyfata.rest.api.common.service.EmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,7 +48,7 @@ class AuthServiceTest {
 
         User retrievedUser = userRepository.findByEmail("test@example.com").orElse(null);
         assertNotNull(retrievedUser);
-        assertEquals("testuser", retrievedUser.getUsername());
+        assertEquals("testuser", retrievedUser.getDisplayName());
         assertEquals("Test", retrievedUser.getFirstName());
         assertFalse(retrievedUser.getEmailVerified());
     }

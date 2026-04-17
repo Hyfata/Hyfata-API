@@ -1,9 +1,9 @@
 package kr.hyfata.rest.api.agora.team.service;
 
-import kr.hyfata.rest.api.auth.dto.agora.team.TeamResponse;
-import kr.hyfata.rest.api.auth.dto.agora.team.CreateTeamRequest;
-import kr.hyfata.rest.api.auth.dto.agora.team.TeamMemberResponse;
-import kr.hyfata.rest.api.auth.dto.agora.team.TeamInvitationResponse;
+import kr.hyfata.rest.api.agora.team.dto.TeamResponse;
+import kr.hyfata.rest.api.agora.team.dto.CreateTeamRequest;
+import kr.hyfata.rest.api.agora.team.dto.TeamMemberResponse;
+import kr.hyfata.rest.api.agora.team.dto.TeamInvitationResponse;
 
 import java.util.List;
 

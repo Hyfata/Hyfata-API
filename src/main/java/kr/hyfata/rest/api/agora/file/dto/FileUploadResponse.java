@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.file.dto;
 
-import kr.hyfata.rest.api.entity.agora.AgoraFile;
+import kr.hyfata.rest.api.agora.file.entity.AgoraFile;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

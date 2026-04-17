@@ -2,6 +2,7 @@ package kr.hyfata.rest.api.agora.chat.entity;
 
 import jakarta.persistence.*;
 import kr.hyfata.rest.api.auth.entity.User;
+import kr.hyfata.rest.api.agora.team.entity.Team;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.team.repository;
 
-import kr.hyfata.rest.api.entity.agora.Event;
+import kr.hyfata.rest.api.agora.team.entity.Event;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

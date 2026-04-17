@@ -1,8 +1,8 @@
-package kr.hyfata.rest.api.dto.agora.team;
+package kr.hyfata.rest.api.agora.team.dto;
 
-import kr.hyfata.rest.api.entity.agora.AgoraUserProfile;
-import kr.hyfata.rest.api.entity.agora.TeamInvitation;
-import kr.hyfata.rest.api.entity.agora.TeamProfile;
+import kr.hyfata.rest.api.agora.profile.entity.AgoraUserProfile;
+import kr.hyfata.rest.api.agora.team.entity.TeamInvitation;
+import kr.hyfata.rest.api.agora.team.entity.TeamProfile;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

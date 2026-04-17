@@ -1,11 +1,11 @@
 package kr.hyfata.rest.api.agora.file.service.impl;
 
 import kr.hyfata.rest.api.common.config.FileStorageConfig;
-import kr.hyfata.rest.api.auth.dto.agora.FileUploadResponse;
+import kr.hyfata.rest.api.agora.file.dto.FileUploadResponse;
 import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.entity.agora.AgoraFile;
+import kr.hyfata.rest.api.agora.file.entity.AgoraFile;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
-import kr.hyfata.rest.api.repository.agora.AgoraFileRepository;
+import kr.hyfata.rest.api.agora.file.repository.AgoraFileRepository;
 import kr.hyfata.rest.api.agora.file.service.AgoraFileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

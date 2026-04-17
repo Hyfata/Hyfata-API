@@ -1,16 +1,16 @@
 package kr.hyfata.rest.api.agora.chat.service.impl;
 
-import kr.hyfata.rest.api.auth.dto.agora.chat.GroupChatResponse;
-import kr.hyfata.rest.api.auth.dto.agora.chat.CreateGroupChatRequest;
-import kr.hyfata.rest.api.auth.dto.agora.chat.InviteMembersRequest;
+import kr.hyfata.rest.api.agora.chat.dto.GroupChatResponse;
+import kr.hyfata.rest.api.agora.chat.dto.CreateGroupChatRequest;
+import kr.hyfata.rest.api.agora.chat.dto.InviteMembersRequest;
 import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.entity.agora.Chat;
-import kr.hyfata.rest.api.entity.agora.ChatParticipant;
-import kr.hyfata.rest.api.entity.agora.AgoraUserProfile;
+import kr.hyfata.rest.api.agora.chat.entity.Chat;
+import kr.hyfata.rest.api.agora.chat.entity.ChatParticipant;
+import kr.hyfata.rest.api.agora.profile.entity.AgoraUserProfile;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
-import kr.hyfata.rest.api.repository.agora.AgoraUserProfileRepository;
-import kr.hyfata.rest.api.repository.agora.ChatRepository;
-import kr.hyfata.rest.api.repository.agora.ChatParticipantRepository;
+import kr.hyfata.rest.api.agora.profile.repository.AgoraUserProfileRepository;
+import kr.hyfata.rest.api.agora.chat.repository.ChatRepository;
+import kr.hyfata.rest.api.agora.chat.repository.ChatParticipantRepository;
 import kr.hyfata.rest.api.agora.chat.service.AgoraGroupChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -179,7 +179,7 @@ public class AgoraGroupChatServiceImpl implements AgoraGroupChatService {
     public String removeMember(String userEmail, Long chatId, Long memberUserId) {
         User user = findUserByEmail(userEmail);
 
-        Chat chat = chatRepository.findById(chatId)
+        chatRepository.findById(chatId)
                 .orElseThrow(() -> new IllegalArgumentException("Chat not found"));
 
         // Verify user is ADMIN
@@ -204,7 +204,7 @@ public class AgoraGroupChatServiceImpl implements AgoraGroupChatService {
     public String leaveGroup(String userEmail, Long chatId) {
         User user = findUserByEmail(userEmail);
 
-        Chat chat = chatRepository.findById(chatId)
+        chatRepository.findById(chatId)
                 .orElseThrow(() -> new IllegalArgumentException("Chat not found"));
 
         ChatParticipant participant = chatParticipantRepository.findByChat_IdAndUser_Id(chatId, user.getId())

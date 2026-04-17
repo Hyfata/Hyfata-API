@@ -1,6 +1,7 @@
 package kr.hyfata.rest.api.common.service;
 
 import kr.hyfata.rest.api.auth.dto.ClientResponse;
+import kr.hyfata.rest.api.auth.service.ClientService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

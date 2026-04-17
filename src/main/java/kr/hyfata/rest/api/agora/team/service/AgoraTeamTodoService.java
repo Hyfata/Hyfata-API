@@ -1,8 +1,8 @@
 package kr.hyfata.rest.api.agora.team.service;
 
-import kr.hyfata.rest.api.auth.dto.agora.team.TodoResponse;
-import kr.hyfata.rest.api.auth.dto.agora.team.CreateTodoRequest;
-import kr.hyfata.rest.api.auth.dto.agora.team.UpdateTodoRequest;
+import kr.hyfata.rest.api.agora.team.dto.TodoResponse;
+import kr.hyfata.rest.api.agora.team.dto.CreateTodoRequest;
+import kr.hyfata.rest.api.agora.team.dto.UpdateTodoRequest;
 
 import java.util.List;
 

@@ -1,5 +1,6 @@
 package kr.hyfata.rest.api.util;
 
+import kr.hyfata.rest.api.common.util.DeviceDetector;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.notification.repository;
 
-import kr.hyfata.rest.api.entity.agora.Notification;
+import kr.hyfata.rest.api.agora.notification.entity.Notification;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;

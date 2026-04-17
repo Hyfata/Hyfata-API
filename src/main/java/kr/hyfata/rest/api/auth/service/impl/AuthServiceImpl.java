@@ -6,7 +6,7 @@ import kr.hyfata.rest.api.auth.entity.User;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
 import kr.hyfata.rest.api.auth.service.AuthService;
 import kr.hyfata.rest.api.auth.service.ClientService;
-import kr.hyfata.rest.api.service.EmailService;
+import kr.hyfata.rest.api.common.service.EmailService;
 import kr.hyfata.rest.api.auth.service.SessionService;
 import kr.hyfata.rest.api.common.util.JwtUtil;
 import kr.hyfata.rest.api.common.util.TokenGenerator;

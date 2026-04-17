@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.chat.repository;
 
-import kr.hyfata.rest.api.entity.agora.MessageReadStatus;
+import kr.hyfata.rest.api.agora.chat.entity.MessageReadStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

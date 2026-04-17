@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.notification.dto;
 
-import kr.hyfata.rest.api.entity.agora.Notification;
+import kr.hyfata.rest.api.agora.notification.entity.Notification;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

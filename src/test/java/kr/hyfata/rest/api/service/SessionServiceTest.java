@@ -9,6 +9,7 @@ import kr.hyfata.rest.api.auth.service.impl.SessionServiceImpl;
 import kr.hyfata.rest.api.common.util.DeviceDetector;
 import kr.hyfata.rest.api.common.util.GeoIpService;
 import kr.hyfata.rest.api.common.util.IpUtil;
+import kr.hyfata.rest.api.auth.service.TokenBlacklistService;
 import kr.hyfata.rest.api.common.util.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

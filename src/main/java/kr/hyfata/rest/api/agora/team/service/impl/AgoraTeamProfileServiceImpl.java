@@ -1,11 +1,11 @@
 package kr.hyfata.rest.api.agora.team.service.impl;
 
-import kr.hyfata.rest.api.auth.dto.agora.team.TeamProfileResponse;
-import kr.hyfata.rest.api.auth.dto.agora.team.CreateTeamProfileRequest;
+import kr.hyfata.rest.api.agora.team.dto.TeamProfileResponse;
+import kr.hyfata.rest.api.agora.team.dto.CreateTeamProfileRequest;
 import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.entity.agora.TeamProfile;
+import kr.hyfata.rest.api.agora.team.entity.TeamProfile;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
-import kr.hyfata.rest.api.repository.agora.TeamProfileRepository;
+import kr.hyfata.rest.api.agora.team.repository.TeamProfileRepository;
 import kr.hyfata.rest.api.agora.team.service.AgoraTeamProfileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

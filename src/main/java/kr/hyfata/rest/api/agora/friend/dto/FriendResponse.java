@@ -1,7 +1,7 @@
-package kr.hyfata.rest.api.dto.agora.friend;
+package kr.hyfata.rest.api.agora.friend.dto;
 
-import kr.hyfata.rest.api.agora.friend.entity.Friend
-import kr.hyfata.rest.api.entity.agora.AgoraUserProfile;
+import kr.hyfata.rest.api.agora.friend.entity.Friend;
+import kr.hyfata.rest.api.agora.profile.entity.AgoraUserProfile;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

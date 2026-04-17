@@ -1,4 +1,4 @@
-package kr.hyfata.rest.api.dto.agora.team;
+package kr.hyfata.rest.api.agora.team.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

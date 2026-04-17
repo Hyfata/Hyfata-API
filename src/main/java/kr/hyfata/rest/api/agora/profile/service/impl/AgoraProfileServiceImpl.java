@@ -1,13 +1,13 @@
 package kr.hyfata.rest.api.agora.profile.service.impl;
 
-import kr.hyfata.rest.api.auth.dto.agora.AgoraProfileResponse;
-import kr.hyfata.rest.api.auth.dto.agora.CreateAgoraProfileRequest;
-import kr.hyfata.rest.api.auth.dto.agora.PublicAgoraProfileResponse;
-import kr.hyfata.rest.api.auth.dto.agora.UpdateAgoraProfileRequest;
+import kr.hyfata.rest.api.agora.profile.dto.AgoraProfileResponse;
+import kr.hyfata.rest.api.agora.profile.dto.CreateAgoraProfileRequest;
+import kr.hyfata.rest.api.agora.profile.dto.PublicAgoraProfileResponse;
+import kr.hyfata.rest.api.agora.profile.dto.UpdateAgoraProfileRequest;
 import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.entity.agora.AgoraUserProfile;
+import kr.hyfata.rest.api.agora.profile.entity.AgoraUserProfile;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
-import kr.hyfata.rest.api.repository.agora.AgoraUserProfileRepository;
+import kr.hyfata.rest.api.agora.profile.repository.AgoraUserProfileRepository;
 import kr.hyfata.rest.api.agora.profile.service.AgoraProfileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

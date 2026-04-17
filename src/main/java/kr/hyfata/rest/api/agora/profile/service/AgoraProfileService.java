@@ -1,9 +1,9 @@
 package kr.hyfata.rest.api.agora.profile.service;
 
-import kr.hyfata.rest.api.auth.dto.agora.AgoraProfileResponse;
-import kr.hyfata.rest.api.auth.dto.agora.CreateAgoraProfileRequest;
-import kr.hyfata.rest.api.auth.dto.agora.PublicAgoraProfileResponse;
-import kr.hyfata.rest.api.auth.dto.agora.UpdateAgoraProfileRequest;
+import kr.hyfata.rest.api.agora.profile.dto.AgoraProfileResponse;
+import kr.hyfata.rest.api.agora.profile.dto.CreateAgoraProfileRequest;
+import kr.hyfata.rest.api.agora.profile.dto.PublicAgoraProfileResponse;
+import kr.hyfata.rest.api.agora.profile.dto.UpdateAgoraProfileRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 

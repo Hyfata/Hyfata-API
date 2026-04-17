@@ -1,7 +1,7 @@
-package kr.hyfata.rest.api.dto.agora.chat;
+package kr.hyfata.rest.api.agora.chat.dto;
 
-import kr.hyfata.rest.api.entity.agora.Message;
-import kr.hyfata.rest.api.entity.agora.AgoraUserProfile;
+import kr.hyfata.rest.api.agora.chat.entity.Message;
+import kr.hyfata.rest.api.agora.profile.entity.AgoraUserProfile;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

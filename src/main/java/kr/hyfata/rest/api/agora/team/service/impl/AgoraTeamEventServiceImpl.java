@@ -1,14 +1,14 @@
 package kr.hyfata.rest.api.agora.team.service.impl;
 
-import kr.hyfata.rest.api.auth.dto.agora.team.EventResponse;
-import kr.hyfata.rest.api.auth.dto.agora.team.CreateEventRequest;
-import kr.hyfata.rest.api.auth.dto.agora.team.UpdateEventRequest;
+import kr.hyfata.rest.api.agora.team.dto.EventResponse;
+import kr.hyfata.rest.api.agora.team.dto.CreateEventRequest;
+import kr.hyfata.rest.api.agora.team.dto.UpdateEventRequest;
 import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.agora.team.entity.Team
-import kr.hyfata.rest.api.entity.agora.Event;
+import kr.hyfata.rest.api.agora.team.entity.Team;
+import kr.hyfata.rest.api.agora.team.entity.Event;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
 import kr.hyfata.rest.api.agora.team.repository.TeamRepository;
-import kr.hyfata.rest.api.repository.agora.EventRepository;
+import kr.hyfata.rest.api.agora.team.repository.EventRepository;
 import kr.hyfata.rest.api.agora.team.repository.TeamMemberRepository;
 import kr.hyfata.rest.api.agora.team.service.AgoraTeamEventService;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +33,7 @@ public class AgoraTeamEventServiceImpl implements AgoraTeamEventService {
     @Override
     public List<EventResponse> getEventList(String userEmail, Long teamId) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
+        findTeamById(teamId);
 
         // 팀 멤버 확인
         if (!isTeamMember(teamId, user.getId())) {
@@ -49,7 +49,7 @@ public class AgoraTeamEventServiceImpl implements AgoraTeamEventService {
     @Override
     public EventResponse getEventDetail(String userEmail, Long teamId, Long eventId) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
+        findTeamById(teamId);
 
         // 팀 멤버 확인
         if (!isTeamMember(teamId, user.getId())) {

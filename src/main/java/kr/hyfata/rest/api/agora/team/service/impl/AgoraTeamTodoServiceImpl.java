@@ -1,14 +1,14 @@
 package kr.hyfata.rest.api.agora.team.service.impl;
 
-import kr.hyfata.rest.api.auth.dto.agora.team.TodoResponse;
-import kr.hyfata.rest.api.auth.dto.agora.team.CreateTodoRequest;
-import kr.hyfata.rest.api.auth.dto.agora.team.UpdateTodoRequest;
+import kr.hyfata.rest.api.agora.team.dto.TodoResponse;
+import kr.hyfata.rest.api.agora.team.dto.CreateTodoRequest;
+import kr.hyfata.rest.api.agora.team.dto.UpdateTodoRequest;
 import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.agora.team.entity.Team
-import kr.hyfata.rest.api.entity.agora.Todo;
+import kr.hyfata.rest.api.agora.team.entity.Team;
+import kr.hyfata.rest.api.agora.team.entity.Todo;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
 import kr.hyfata.rest.api.agora.team.repository.TeamRepository;
-import kr.hyfata.rest.api.repository.agora.TodoRepository;
+import kr.hyfata.rest.api.agora.team.repository.TodoRepository;
 import kr.hyfata.rest.api.agora.team.repository.TeamMemberRepository;
 import kr.hyfata.rest.api.agora.team.service.AgoraTeamTodoService;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +34,7 @@ public class AgoraTeamTodoServiceImpl implements AgoraTeamTodoService {
     @Override
     public List<TodoResponse> getTodoList(String userEmail, Long teamId) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
+        findTeamById(teamId);
 
         // 팀 멤버 확인
         if (!isTeamMember(teamId, user.getId())) {
@@ -50,7 +50,7 @@ public class AgoraTeamTodoServiceImpl implements AgoraTeamTodoService {
     @Override
     public TodoResponse getTodoDetail(String userEmail, Long teamId, Long todoId) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
+        findTeamById(teamId);
 
         // 팀 멤버 확인
         if (!isTeamMember(teamId, user.getId())) {
@@ -111,7 +111,7 @@ public class AgoraTeamTodoServiceImpl implements AgoraTeamTodoService {
     @Transactional
     public TodoResponse updateTodo(String userEmail, Long teamId, Long todoId, UpdateTodoRequest request) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
+        findTeamById(teamId);
 
         // 팀 멤버 확인
         if (!isTeamMember(teamId, user.getId())) {
@@ -158,7 +158,7 @@ public class AgoraTeamTodoServiceImpl implements AgoraTeamTodoService {
     @Transactional
     public TodoResponse completeTodo(String userEmail, Long teamId, Long todoId) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
+        findTeamById(teamId);
 
         // 팀 멤버 확인
         if (!isTeamMember(teamId, user.getId())) {
@@ -183,7 +183,7 @@ public class AgoraTeamTodoServiceImpl implements AgoraTeamTodoService {
     @Transactional
     public String deleteTodo(String userEmail, Long teamId, Long todoId) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
+        findTeamById(teamId);
 
         // 팀 멤버 확인
         if (!isTeamMember(teamId, user.getId())) {

@@ -1,14 +1,14 @@
 package kr.hyfata.rest.api.agora.team.service.impl;
 
-import kr.hyfata.rest.api.auth.dto.agora.team.NoticeResponse;
-import kr.hyfata.rest.api.auth.dto.agora.team.CreateNoticeRequest;
-import kr.hyfata.rest.api.auth.dto.agora.team.UpdateNoticeRequest;
+import kr.hyfata.rest.api.agora.team.dto.NoticeResponse;
+import kr.hyfata.rest.api.agora.team.dto.CreateNoticeRequest;
+import kr.hyfata.rest.api.agora.team.dto.UpdateNoticeRequest;
 import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.agora.team.entity.Team
-import kr.hyfata.rest.api.entity.agora.Notice;
+import kr.hyfata.rest.api.agora.team.entity.Team;
+import kr.hyfata.rest.api.agora.team.entity.Notice;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
 import kr.hyfata.rest.api.agora.team.repository.TeamRepository;
-import kr.hyfata.rest.api.repository.agora.NoticeRepository;
+import kr.hyfata.rest.api.agora.team.repository.NoticeRepository;
 import kr.hyfata.rest.api.agora.team.repository.TeamMemberRepository;
 import kr.hyfata.rest.api.agora.team.service.AgoraTeamNoticeService;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +33,7 @@ public class AgoraTeamNoticeServiceImpl implements AgoraTeamNoticeService {
     @Override
     public List<NoticeResponse> getNoticeList(String userEmail, Long teamId) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
+        findTeamById(teamId);
 
         // 팀 멤버 확인
         if (!isTeamMember(teamId, user.getId())) {
@@ -49,7 +49,7 @@ public class AgoraTeamNoticeServiceImpl implements AgoraTeamNoticeService {
     @Override
     public NoticeResponse getNoticeDetail(String userEmail, Long teamId, Long noticeId) {
         User user = findUserByEmail(userEmail);
-        Team team = findTeamById(teamId);
+        findTeamById(teamId);
 
         // 팀 멤버 확인
         if (!isTeamMember(teamId, user.getId())) {

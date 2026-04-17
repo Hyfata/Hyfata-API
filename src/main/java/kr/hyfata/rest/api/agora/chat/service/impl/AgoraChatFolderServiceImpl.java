@@ -1,16 +1,16 @@
 package kr.hyfata.rest.api.agora.chat.service.impl;
 
-import kr.hyfata.rest.api.auth.dto.agora.ChatFolderResponse;
-import kr.hyfata.rest.api.auth.dto.agora.CreateChatFolderRequest;
+import kr.hyfata.rest.api.agora.chat.dto.ChatFolderResponse;
+import kr.hyfata.rest.api.agora.chat.dto.CreateChatFolderRequest;
 import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.entity.agora.ChatFolder;
-import kr.hyfata.rest.api.entity.agora.ChatFolderItem;
-import kr.hyfata.rest.api.entity.agora.Chat;
+import kr.hyfata.rest.api.agora.chat.entity.ChatFolder;
+import kr.hyfata.rest.api.agora.chat.entity.ChatFolderItem;
+import kr.hyfata.rest.api.agora.chat.entity.Chat;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
-import kr.hyfata.rest.api.repository.agora.ChatFolderRepository;
-import kr.hyfata.rest.api.repository.agora.ChatFolderItemRepository;
-import kr.hyfata.rest.api.repository.agora.ChatRepository;
-import kr.hyfata.rest.api.repository.agora.ChatParticipantRepository;
+import kr.hyfata.rest.api.agora.chat.repository.ChatFolderRepository;
+import kr.hyfata.rest.api.agora.chat.repository.ChatFolderItemRepository;
+import kr.hyfata.rest.api.agora.chat.repository.ChatRepository;
+import kr.hyfata.rest.api.agora.chat.repository.ChatParticipantRepository;
 import kr.hyfata.rest.api.agora.chat.service.AgoraChatFolderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -166,7 +166,7 @@ public class AgoraChatFolderServiceImpl implements AgoraChatFolderService {
     public String removeChatFromFolder(String userEmail, Long chatId) {
         User user = findUserByEmail(userEmail);
 
-        Chat chat = chatRepository.findById(chatId)
+        chatRepository.findById(chatId)
                 .orElseThrow(() -> new IllegalArgumentException("Chat not found"));
 
         java.util.List<ChatFolderItem> items = chatFolderItemRepository.findByChat_Id(chatId);

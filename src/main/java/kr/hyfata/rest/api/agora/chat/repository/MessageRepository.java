@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.chat.repository;
 
-import kr.hyfata.rest.api.entity.agora.Message;
+import kr.hyfata.rest.api.agora.chat.entity.Message;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;

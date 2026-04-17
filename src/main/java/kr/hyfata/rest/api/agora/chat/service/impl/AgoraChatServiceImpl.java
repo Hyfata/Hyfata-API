@@ -1,29 +1,29 @@
 package kr.hyfata.rest.api.agora.chat.service.impl;
 
-import kr.hyfata.rest.api.auth.dto.agora.chat.ChatResponse;
-import kr.hyfata.rest.api.auth.dto.agora.chat.ChatListResponse;
-import kr.hyfata.rest.api.auth.dto.agora.chat.CreateChatRequest;
-import kr.hyfata.rest.api.auth.dto.agora.chat.CreateDirectChatRequest;
-import kr.hyfata.rest.api.auth.dto.agora.chat.CreateGroupChatRequest;
-import kr.hyfata.rest.api.auth.dto.agora.chat.MessageDto;
-import kr.hyfata.rest.api.auth.dto.agora.chat.ParticipantProfile;
-import kr.hyfata.rest.api.auth.dto.agora.chat.SendMessageRequest;
+import kr.hyfata.rest.api.agora.chat.dto.ChatResponse;
+import kr.hyfata.rest.api.agora.chat.dto.ChatListResponse;
+import kr.hyfata.rest.api.agora.chat.dto.CreateChatRequest;
+import kr.hyfata.rest.api.agora.chat.dto.CreateDirectChatRequest;
+import kr.hyfata.rest.api.agora.chat.dto.CreateGroupChatRequest;
+import kr.hyfata.rest.api.agora.chat.dto.MessageDto;
+import kr.hyfata.rest.api.agora.chat.dto.ParticipantProfile;
+import kr.hyfata.rest.api.agora.chat.dto.SendMessageRequest;
 import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.entity.agora.Chat;
-import kr.hyfata.rest.api.entity.agora.ChatParticipant;
-import kr.hyfata.rest.api.entity.agora.Message;
-import kr.hyfata.rest.api.entity.agora.MessageReadStatus;
-import kr.hyfata.rest.api.entity.agora.AgoraUserProfile;
-import kr.hyfata.rest.api.entity.agora.Team;
-import kr.hyfata.rest.api.entity.agora.TeamProfile;
+import kr.hyfata.rest.api.agora.chat.entity.Chat;
+import kr.hyfata.rest.api.agora.chat.entity.ChatParticipant;
+import kr.hyfata.rest.api.agora.chat.entity.Message;
+import kr.hyfata.rest.api.agora.chat.entity.MessageReadStatus;
+import kr.hyfata.rest.api.agora.profile.entity.AgoraUserProfile;
+import kr.hyfata.rest.api.agora.team.entity.Team;
+import kr.hyfata.rest.api.agora.team.entity.TeamProfile;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
-import kr.hyfata.rest.api.repository.agora.AgoraUserProfileRepository;
-import kr.hyfata.rest.api.repository.agora.ChatRepository;
-import kr.hyfata.rest.api.repository.agora.ChatParticipantRepository;
-import kr.hyfata.rest.api.repository.agora.MessageRepository;
-import kr.hyfata.rest.api.repository.agora.MessageReadStatusRepository;
-import kr.hyfata.rest.api.repository.agora.TeamRepository;
-import kr.hyfata.rest.api.repository.agora.TeamProfileRepository;
+import kr.hyfata.rest.api.agora.profile.repository.AgoraUserProfileRepository;
+import kr.hyfata.rest.api.agora.chat.repository.ChatRepository;
+import kr.hyfata.rest.api.agora.chat.repository.ChatParticipantRepository;
+import kr.hyfata.rest.api.agora.chat.repository.MessageRepository;
+import kr.hyfata.rest.api.agora.chat.repository.MessageReadStatusRepository;
+import kr.hyfata.rest.api.agora.team.repository.TeamRepository;
+import kr.hyfata.rest.api.agora.team.repository.TeamProfileRepository;
 import kr.hyfata.rest.api.agora.chat.service.AgoraChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +33,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -260,16 +259,6 @@ public class AgoraChatServiceImpl implements AgoraChatService {
     private User findUserByEmail(String userEmail) {
         return userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
-    }
-
-    private List<String> getParticipantAgoraIds(Chat chat) {
-        return chat.getParticipants().stream()
-                .map(participant -> {
-                    AgoraUserProfile profile = agoraUserProfileRepository.findById(participant.getUser().getId())
-                            .orElse(null);
-                    return profile != null ? profile.getAgoraId() : "";
-                })
-                .collect(Collectors.toList());
     }
 
     // ==================== 새로운 컨텍스트 기반 메서드 ====================

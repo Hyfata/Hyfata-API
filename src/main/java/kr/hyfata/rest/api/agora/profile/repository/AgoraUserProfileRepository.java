@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.profile.repository;
 
-import kr.hyfata.rest.api.entity.agora.AgoraUserProfile;
+import kr.hyfata.rest.api.agora.profile.entity.AgoraUserProfile;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

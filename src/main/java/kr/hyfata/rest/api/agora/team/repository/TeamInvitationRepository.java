@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.team.repository;
 
-import kr.hyfata.rest.api.entity.agora.TeamInvitation;
+import kr.hyfata.rest.api.agora.team.entity.TeamInvitation;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

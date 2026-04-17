@@ -1,13 +1,13 @@
 package kr.hyfata.rest.api.agora.chat.service;
 
-import kr.hyfata.rest.api.auth.dto.agora.chat.ChatResponse;
-import kr.hyfata.rest.api.auth.dto.agora.chat.ChatListResponse;
-import kr.hyfata.rest.api.auth.dto.agora.chat.CreateChatRequest;
-import kr.hyfata.rest.api.auth.dto.agora.chat.CreateDirectChatRequest;
-import kr.hyfata.rest.api.auth.dto.agora.chat.CreateGroupChatRequest;
-import kr.hyfata.rest.api.auth.dto.agora.chat.MessageDto;
-import kr.hyfata.rest.api.auth.dto.agora.chat.SendMessageRequest;
-import kr.hyfata.rest.api.entity.agora.Chat;
+import kr.hyfata.rest.api.agora.chat.dto.ChatResponse;
+import kr.hyfata.rest.api.agora.chat.dto.ChatListResponse;
+import kr.hyfata.rest.api.agora.chat.dto.CreateChatRequest;
+import kr.hyfata.rest.api.agora.chat.dto.CreateDirectChatRequest;
+import kr.hyfata.rest.api.agora.chat.dto.CreateGroupChatRequest;
+import kr.hyfata.rest.api.agora.chat.dto.MessageDto;
+import kr.hyfata.rest.api.agora.chat.dto.SendMessageRequest;
+import kr.hyfata.rest.api.agora.chat.entity.Chat;
 
 import java.util.List;
 

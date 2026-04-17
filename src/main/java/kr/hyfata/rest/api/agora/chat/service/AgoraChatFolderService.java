@@ -1,7 +1,7 @@
 package kr.hyfata.rest.api.agora.chat.service;
 
-import kr.hyfata.rest.api.auth.dto.agora.ChatFolderResponse;
-import kr.hyfata.rest.api.auth.dto.agora.CreateChatFolderRequest;
+import kr.hyfata.rest.api.agora.chat.dto.ChatFolderResponse;
+import kr.hyfata.rest.api.agora.chat.dto.CreateChatFolderRequest;
 
 import java.util.List;
 

@@ -63,7 +63,7 @@ public class OAuthServiceImpl implements OAuthService {
         }
 
         // 사용자 검증
-        User user = userRepository.findByEmail(email)
+        userRepository.findByEmail(email)
                 .orElseThrow(() -> new BadCredentialsException("User not found"));
 
         // Authorization Code 생성

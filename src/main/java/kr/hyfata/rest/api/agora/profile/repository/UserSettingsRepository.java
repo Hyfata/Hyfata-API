@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.agora.profile.repository;
 
-import kr.hyfata.rest.api.entity.agora.UserSettings;
+import kr.hyfata.rest.api.agora.profile.entity.UserSettings;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

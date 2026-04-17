@@ -1,11 +1,11 @@
 package kr.hyfata.rest.api.agora.team.listener;
 
 import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.agora.chat.entity.Chat
+import kr.hyfata.rest.api.agora.chat.entity.Chat;
 import kr.hyfata.rest.api.agora.chat.entity.ChatParticipant;
-import kr.hyfata.rest.api.event.TeamMemberEvent;
+import kr.hyfata.rest.api.agora.team.event.TeamMemberEvent;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
-import kr.hyfata.rest.api.repository.agora.ChatParticipantRepository;
+import kr.hyfata.rest.api.agora.chat.repository.ChatParticipantRepository;
 import kr.hyfata.rest.api.agora.chat.repository.ChatRepository;
 import kr.hyfata.rest.api.agora.chat.service.AgoraChatService;
 import lombok.RequiredArgsConstructor;
