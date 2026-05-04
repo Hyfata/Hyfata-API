@@ -1,16 +1,20 @@
 package kr.hyfata.rest.api.auth.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import kr.hyfata.rest.api.auth.dto.OAuthTokenResponse;
+import kr.hyfata.rest.api.auth.dto.PasswordResetRequest;
 import kr.hyfata.rest.api.auth.dto.RegisterRequest;
 import kr.hyfata.rest.api.auth.entity.User;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
 import kr.hyfata.rest.api.auth.service.AuthService;
 import kr.hyfata.rest.api.auth.service.ClientService;
 import kr.hyfata.rest.api.auth.service.OAuthService;
+import kr.hyfata.rest.api.common.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
@@ -38,26 +42,13 @@ public class OAuthController {
     private final AuthService authService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
 
     /**
      * 1단계: Authorization 요청
      * GET /oauth/authorize?client_id=xxx&redirect_uri=xxx&state=xxx&response_type=code&code_challenge=xxx&code_challenge_method=xxx
      *
-     * 예시 (PKCE 없음):
-     * https://api.hyfata.com/oauth/authorize?
-     *   client_id=client_001&
-     *   redirect_uri=https://site1.com/callback&
-     *   state=random_state_123&
-     *   response_type=code
-     *
-     * 예시 (PKCE 포함 - Flutter 앱):
-     * https://api.hyfata.com/oauth/authorize?
-     *   client_id=client_001&
-     *   redirect_uri=https://site1.com/callback&
-     *   state=random_state_123&
-     *   response_type=code&
-     *   code_challenge=E9Mrozoa2owUzA7VLHwAIAKllCOvtQyen8P0xWXomaQ&
-     *   code_challenge_method=S256
+     * 이미 Hyfata에 로그인된 사용자는 자동으로 authorization code를 발급받습니다.
      */
     @GetMapping("/authorize")
     public String authorize(
@@ -67,7 +58,8 @@ public class OAuthController {
             @RequestParam(defaultValue = "code") String response_type,
             @RequestParam(required = false) String code_challenge,
             @RequestParam(required = false) String code_challenge_method,
-            Model model) {
+            Model model,
+            HttpServletRequest request) {
 
         try {
             // 클라이언트 검증
@@ -92,6 +84,31 @@ public class OAuthController {
             // State 파라미터가 없으면 생성 (CSRF 방지)
             if (state == null || state.isEmpty()) {
                 state = UUID.randomUUID().toString();
+            }
+
+            // 이미 로그인된 사용자 확인 (쿠키 기반 세션)
+            User autoUser = getUserFromCookie(request);
+            if (autoUser != null) {
+                if (!autoUser.isEnabled()) {
+                    model.addAttribute("error", "Account is disabled");
+                    return "oauth/error";
+                }
+                if (!autoUser.getEmailVerified()) {
+                    model.addAttribute("error", "Email verification required");
+                    return "oauth/error";
+                }
+
+                String authCode;
+                if (code_challenge != null && !code_challenge.isEmpty()) {
+                    authCode = oAuthService.generateAuthorizationCode(client_id, autoUser.getEmail(), redirect_uri, state,
+                            code_challenge, code_challenge_method);
+                } else {
+                    authCode = oAuthService.generateAuthorizationCode(client_id, autoUser.getEmail(), redirect_uri, state);
+                }
+
+                String redirectUrl = redirect_uri + "?code=" + authCode + "&state=" + state;
+                log.info("Auto-authorized already logged-in user: email={}, client_id={}", autoUser.getEmail(), client_id);
+                return "redirect:" + redirectUrl;
             }
 
             // 로그인 페이지로 이동 (state와 클라이언트 정보 전달)
@@ -121,26 +138,6 @@ public class OAuthController {
     /**
      * 2단계: 로그인 처리 및 Authorization Code 생성
      * POST /oauth/login
-     *
-     * 요청 (PKCE 없음):
-     * {
-     *   "email": "user@example.com",
-     *   "password": "password123",
-     *   "client_id": "client_001",
-     *   "redirect_uri": "https://site1.com/callback",
-     *   "state": "random_state_123"
-     * }
-     *
-     * 요청 (PKCE 포함):
-     * {
-     *   "email": "user@example.com",
-     *   "password": "password123",
-     *   "client_id": "client_001",
-     *   "redirect_uri": "https://site1.com/callback",
-     *   "state": "random_state_123",
-     *   "code_challenge": "E9Mrozoa2owUzA7VLHwAIAKllCOvtQyen8P0xWXomaQ",
-     *   "code_challenge_method": "S256"
-     * }
      */
     @PostMapping("/login")
     public String login(
@@ -151,7 +148,8 @@ public class OAuthController {
             @RequestParam String state,
             @RequestParam(required = false) String code_challenge,
             @RequestParam(required = false) String code_challenge_method,
-            Model model) {
+            Model model,
+            HttpServletResponse response) {
 
         try {
             // 1. 사용자 조회
@@ -184,7 +182,11 @@ public class OAuthController {
                 log.info("Authorization code generated: email={}, client_id={}", email, client_id);
             }
 
-            // 6. 리다이렉트 URL 구성: redirect_uri?code=xxx&state=xxx
+            // 6. 쿠키에 JWT 설정 (세션 유지)
+            String accessToken = jwtUtil.generateAccessToken(user);
+            setAccessTokenCookie(response, accessToken);
+
+            // 7. 리다이렉트 URL 구성: redirect_uri?code=xxx&state=xxx
             String redirectUrl = redirect_uri + "?code=" + authCode + "&state=" + state;
 
             log.info("User logged in and authorized: email={}, client_id={}", email, client_id);
@@ -206,40 +208,6 @@ public class OAuthController {
     /**
      * 3단계: Authorization Code를 Token으로 교환 또는 Refresh Token으로 갱신
      * POST /oauth/token
-     *
-     * 요청 - Authorization Code (Confidential Client - client_secret 사용):
-     * grant_type=authorization_code&
-     * code=xxx&
-     * client_id=client_001&
-     * client_secret=secret_001&
-     * redirect_uri=https://site1.com/callback
-     *
-     * 요청 - Authorization Code (Public Client - PKCE 사용, client_secret 불필요):
-     * grant_type=authorization_code&
-     * code=xxx&
-     * client_id=client_001&
-     * redirect_uri=https://site1.com/callback&
-     * code_verifier=xxxxxx...
-     *
-     * 요청 - Refresh Token (Confidential Client):
-     * grant_type=refresh_token&
-     * refresh_token=xxx&
-     * client_id=client_001&
-     * client_secret=secret_001
-     *
-     * 요청 - Refresh Token (Public Client - PKCE 기반 세션):
-     * grant_type=refresh_token&
-     * refresh_token=xxx&
-     * client_id=client_001
-     *
-     * 응답:
-     * {
-     *   "access_token": "eyJhbGc...",
-     *   "refresh_token": "eyJhbGc...",
-     *   "token_type": "Bearer",
-     *   "expires_in": 86400000,
-     *   "scope": "user:email user:profile"
-     * }
      */
     @PostMapping("/token")
     @ResponseBody
@@ -247,7 +215,7 @@ public class OAuthController {
             @RequestParam String grant_type,
             @RequestParam(required = false) String code,
             @RequestParam String client_id,
-            @RequestParam(required = false) String client_secret,  // PKCE 사용 시 불필요
+            @RequestParam(required = false) String client_secret,
             @RequestParam(required = false) String redirect_uri,
             @RequestParam(required = false) String code_verifier,
             @RequestParam(required = false) String refresh_token,
@@ -257,7 +225,6 @@ public class OAuthController {
             OAuthTokenResponse tokenResponse;
 
             if ("authorization_code".equals(grant_type)) {
-                // Authorization Code Grant
                 if (code == null || code.isEmpty()) {
                     throw new BadCredentialsException("Authorization code is required");
                 }
@@ -265,7 +232,6 @@ public class OAuthController {
                     throw new BadCredentialsException("redirect_uri is required for authorization_code grant");
                 }
 
-                // Authorization Code를 Token으로 교환
                 tokenResponse = oAuthService.exchangeCodeForToken(
                         code, client_id, client_secret, redirect_uri, code_verifier, request);
 
@@ -276,7 +242,6 @@ public class OAuthController {
                 }
 
             } else if ("refresh_token".equals(grant_type)) {
-                // Refresh Token Grant
                 if (refresh_token == null || refresh_token.isEmpty()) {
                     throw new BadCredentialsException("refresh_token is required");
                 }
@@ -316,29 +281,18 @@ public class OAuthController {
     /**
      * OAuth 로그아웃 (세션 무효화 및 토큰 블랙리스트)
      * POST /oauth/logout
-     *
-     * 요청:
-     * {
-     *   "refresh_token": "eyJhbGc..."
-     * }
-     *
-     * 응답:
-     * {
-     *   "success": true,
-     *   "message": "Logged out successfully"
-     * }
      */
     @PostMapping("/logout")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> logout(
             @RequestParam(required = false) String refresh_token,
             @RequestBody(required = false) Map<String, String> body,
-            Authentication authentication) {
+            Authentication authentication,
+            HttpServletResponse response) {
 
         try {
             String email = authentication.getName();
 
-            // refresh_token은 요청 파라미터 또는 body에서 가져옴
             String token = refresh_token;
             if ((token == null || token.isEmpty()) && body != null) {
                 token = body.get("refresh_token");
@@ -350,11 +304,14 @@ public class OAuthController {
 
             oAuthService.logout(email, token);
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Logged out successfully");
+            // 쿠키 제거
+            clearAccessTokenCookie(response);
 
-            return ResponseEntity.ok(response);
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("message", "Logged out successfully");
+
+            return ResponseEntity.ok(result);
 
         } catch (BadCredentialsException e) {
             log.warn("Logout error: {}", e.getMessage());
@@ -389,6 +346,12 @@ public class OAuthController {
             var clientOpt = clientService.validateClient(client_id);
             if (clientOpt.isEmpty()) {
                 model.addAttribute("error", "Invalid client");
+                return "oauth/error";
+            }
+
+            // Redirect URI 검증
+            if (!oAuthService.validateRedirectUri(client_id, redirect_uri)) {
+                model.addAttribute("error", "Invalid redirect URI");
                 return "oauth/error";
             }
 
@@ -432,6 +395,12 @@ public class OAuthController {
                 return "oauth/error";
             }
 
+            // Redirect URI 검증
+            if (!oAuthService.validateRedirectUri(client_id, redirect_uri)) {
+                model.addAttribute("error", "Invalid redirect URI");
+                return "oauth/error";
+            }
+
             // 회원가입 처리
             RegisterRequest registerRequest = new RegisterRequest();
             registerRequest.setEmail(email);
@@ -471,10 +440,251 @@ public class OAuthController {
     }
 
     /**
+     * 비밀번호 찾기 페이지
+     * GET /oauth/forgot-password
+     */
+    @GetMapping("/forgot-password")
+    public String forgotPasswordPage(
+            @RequestParam String client_id,
+            @RequestParam String redirect_uri,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String code_challenge,
+            @RequestParam(required = false) String code_challenge_method,
+            Model model) {
+
+        try {
+            var clientOpt = clientService.validateClient(client_id);
+            if (clientOpt.isEmpty()) {
+                model.addAttribute("error", "Invalid client");
+                return "oauth/error";
+            }
+
+            if (!oAuthService.validateRedirectUri(client_id, redirect_uri)) {
+                model.addAttribute("error", "Invalid redirect URI");
+                return "oauth/error";
+            }
+
+            model.addAttribute("client_id", client_id);
+            model.addAttribute("client_name", clientOpt.get().getName());
+            model.addAttribute("redirect_uri", redirect_uri);
+            model.addAttribute("state", state);
+            model.addAttribute("code_challenge", code_challenge);
+            model.addAttribute("code_challenge_method", code_challenge_method);
+
+            return "oauth/forgot-password";
+
+        } catch (Exception e) {
+            log.error("Forgot password page error: {}", e.getMessage());
+            model.addAttribute("error", "Failed to load forgot password page");
+            return "oauth/error";
+        }
+    }
+
+    /**
+     * 비밀번호 재설정 요청 처리
+     * POST /oauth/forgot-password
+     */
+    @PostMapping("/forgot-password")
+    public String forgotPassword(
+            @RequestParam String email,
+            @RequestParam String client_id,
+            @RequestParam String redirect_uri,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String code_challenge,
+            @RequestParam(required = false) String code_challenge_method,
+            Model model) {
+
+        try {
+            var clientOpt = clientService.validateClient(client_id);
+            if (clientOpt.isEmpty()) {
+                model.addAttribute("error", "Invalid client");
+                return "oauth/error";
+            }
+
+            if (!oAuthService.validateRedirectUri(client_id, redirect_uri)) {
+                model.addAttribute("error", "Invalid redirect URI");
+                return "oauth/error";
+            }
+
+            authService.requestPasswordReset(email, client_id);
+
+            model.addAttribute("client_id", client_id);
+            model.addAttribute("client_name", clientOpt.get().getName());
+            model.addAttribute("redirect_uri", redirect_uri);
+            model.addAttribute("state", state);
+            model.addAttribute("code_challenge", code_challenge);
+            model.addAttribute("code_challenge_method", code_challenge_method);
+            model.addAttribute("message", "If the email exists, a password reset link has been sent.");
+
+            return "oauth/forgot-password";
+
+        } catch (Exception e) {
+            log.warn("Forgot password error: {}", e.getMessage());
+            model.addAttribute("error", e.getMessage());
+            model.addAttribute("email", email);
+            model.addAttribute("client_id", client_id);
+            model.addAttribute("client_name", clientService.validateClient(client_id)
+                    .map(c -> c.getName()).orElse(client_id));
+            model.addAttribute("redirect_uri", redirect_uri);
+            model.addAttribute("state", state);
+            model.addAttribute("code_challenge", code_challenge);
+            model.addAttribute("code_challenge_method", code_challenge_method);
+            return "oauth/forgot-password";
+        }
+    }
+
+    /**
+     * 비밀번호 재설정 페이지
+     * GET /oauth/reset-password
+     */
+    @GetMapping("/reset-password")
+    public String resetPasswordPage(
+            @RequestParam String token,
+            @RequestParam String client_id,
+            @RequestParam String redirect_uri,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String code_challenge,
+            @RequestParam(required = false) String code_challenge_method,
+            Model model) {
+
+        try {
+            var clientOpt = clientService.validateClient(client_id);
+            if (clientOpt.isEmpty()) {
+                model.addAttribute("error", "Invalid client");
+                return "oauth/error";
+            }
+
+            if (!oAuthService.validateRedirectUri(client_id, redirect_uri)) {
+                model.addAttribute("error", "Invalid redirect URI");
+                return "oauth/error";
+            }
+
+            // 토큰 유효성 간접 확인 (findByResetPasswordToken으로)
+            userRepository.findByResetPasswordToken(token)
+                    .orElseThrow(() -> new BadCredentialsException("Invalid or expired reset token"));
+
+            model.addAttribute("token", token);
+            model.addAttribute("client_id", client_id);
+            model.addAttribute("client_name", clientOpt.get().getName());
+            model.addAttribute("redirect_uri", redirect_uri);
+            model.addAttribute("state", state);
+            model.addAttribute("code_challenge", code_challenge);
+            model.addAttribute("code_challenge_method", code_challenge_method);
+
+            return "oauth/reset-password";
+
+        } catch (Exception e) {
+            log.error("Reset password page error: {}", e.getMessage());
+            model.addAttribute("error", e.getMessage());
+            return "oauth/error";
+        }
+    }
+
+    /**
+     * 비밀번호 재설정 처리
+     * POST /oauth/reset-password
+     */
+    @PostMapping("/reset-password")
+    public String resetPassword(
+            @RequestParam String token,
+            @RequestParam String newPassword,
+            @RequestParam String confirmPassword,
+            @RequestParam String client_id,
+            @RequestParam String redirect_uri,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String code_challenge,
+            @RequestParam(required = false) String code_challenge_method,
+            Model model) {
+
+        try {
+            var clientOpt = clientService.validateClient(client_id);
+            if (clientOpt.isEmpty()) {
+                model.addAttribute("error", "Invalid client");
+                return "oauth/error";
+            }
+
+            if (!oAuthService.validateRedirectUri(client_id, redirect_uri)) {
+                model.addAttribute("error", "Invalid redirect URI");
+                return "oauth/error";
+            }
+
+            PasswordResetRequest resetRequest = PasswordResetRequest.builder()
+                    .token(token)
+                    .newPassword(newPassword)
+                    .confirmPassword(confirmPassword)
+                    .build();
+
+            authService.resetPassword(resetRequest);
+
+            model.addAttribute("client_id", client_id);
+            model.addAttribute("client_name", clientOpt.get().getName());
+            model.addAttribute("redirect_uri", redirect_uri);
+            model.addAttribute("state", state);
+            model.addAttribute("code_challenge", code_challenge);
+            model.addAttribute("code_challenge_method", code_challenge_method);
+            model.addAttribute("message", "Password has been reset successfully. Please log in.");
+
+            return "oauth/reset-password";
+
+        } catch (Exception e) {
+            log.warn("Reset password error: {}", e.getMessage());
+            model.addAttribute("error", e.getMessage());
+            model.addAttribute("token", token);
+            model.addAttribute("client_id", client_id);
+            model.addAttribute("client_name", clientService.validateClient(client_id)
+                    .map(c -> c.getName()).orElse(client_id));
+            model.addAttribute("redirect_uri", redirect_uri);
+            model.addAttribute("state", state);
+            model.addAttribute("code_challenge", code_challenge);
+            model.addAttribute("code_challenge_method", code_challenge_method);
+            return "oauth/reset-password";
+        }
+    }
+
+    /**
      * 에러 페이지
      */
     @GetMapping("/error")
     public String error(Model model) {
         return "oauth/error";
+    }
+
+    // ========== 유틸리티 메서드 ==========
+
+    private User getUserFromCookie(HttpServletRequest request) {
+        if (request.getCookies() == null) return null;
+        for (jakarta.servlet.http.Cookie cookie : request.getCookies()) {
+            if ("hyfata_access_token".equals(cookie.getName())) {
+                String token = cookie.getValue();
+                if (jwtUtil.validateToken(token)) {
+                    String email = jwtUtil.extractEmail(token);
+                    return userRepository.findByEmail(email).orElse(null);
+                }
+            }
+        }
+        return null;
+    }
+
+    private void setAccessTokenCookie(HttpServletResponse response, String accessToken) {
+        long maxAge = jwtUtil.getJwtExpiration() / 1000;
+        ResponseCookie cookie = ResponseCookie.from("hyfata_access_token", accessToken)
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(maxAge)
+                .build();
+        response.addHeader("Set-Cookie", cookie.toString());
+    }
+
+    private void clearAccessTokenCookie(HttpServletResponse response) {
+        ResponseCookie cookie = ResponseCookie.from("hyfata_access_token", "")
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(0)
+                .build();
+        response.addHeader("Set-Cookie", cookie.toString());
     }
 }

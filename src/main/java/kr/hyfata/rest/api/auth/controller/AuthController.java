@@ -1,11 +1,14 @@
 package kr.hyfata.rest.api.auth.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import kr.hyfata.rest.api.auth.dto.*;
 import kr.hyfata.rest.api.auth.service.AuthService;
+import kr.hyfata.rest.api.common.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +23,7 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final JwtUtil jwtUtil;
 
     /**
      * 회원가입
@@ -43,20 +47,23 @@ public class AuthController {
     /**
      * 로그인 (Deprecated)
      * POST /api/auth/login
-     *
-     * @deprecated 이 엔드포인트는 보안상의 이유로 권장되지 않습니다.
-     *             OAuth 2.0 플로우(/oauth/authorize)를 사용하세요.
-     *             PKCE를 지원하여 더 안전한 인증을 제공합니다.
      */
     @Deprecated
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(
             @RequestBody AuthRequest request,
-            HttpServletRequest httpRequest
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
     ) {
         try {
             AuthResponse response = authService.login(request, httpRequest);
             response.setDeprecationWarning("This endpoint is deprecated. Please use OAuth 2.0 (/oauth/authorize) for better security.");
+
+            // 쿠키 설정 (세션 유지)
+            if (response.getAccessToken() != null) {
+                setAccessTokenCookie(httpResponse, response.getAccessToken());
+            }
+
             return ResponseEntity.ok()
                     .header("Deprecation", "true")
                     .header("Link", "</oauth/authorize>; rel=\"successor-version\"")
@@ -77,10 +84,17 @@ public class AuthController {
     @PostMapping("/verify-2fa")
     public ResponseEntity<AuthResponse> verifyTwoFactor(
             @RequestBody TwoFactorRequest request,
-            HttpServletRequest httpRequest
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
     ) {
         try {
             AuthResponse response = authService.verifyTwoFactor(request, httpRequest);
+
+            // 쿠키 설정 (세션 유지)
+            if (response.getAccessToken() != null) {
+                setAccessTokenCookie(httpResponse, response.getAccessToken());
+            }
+
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("2FA verification error: {}", e.getMessage());
@@ -94,19 +108,23 @@ public class AuthController {
     /**
      * 토큰 갱신 (Deprecated)
      * POST /api/auth/refresh
-     *
-     * @deprecated 이 엔드포인트는 보안상의 이유로 권장되지 않습니다.
-     *             OAuth 2.0 플로우(/oauth/token, grant_type=refresh_token)를 사용하세요.
      */
     @Deprecated
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refreshToken(
             @RequestBody RefreshTokenRequest request,
-            HttpServletRequest httpRequest
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
     ) {
         try {
             AuthResponse response = authService.refreshToken(request, httpRequest);
             response.setDeprecationWarning("This endpoint is deprecated. Please use OAuth 2.0 (/oauth/token with grant_type=refresh_token) for better security.");
+
+            // 쿠키 갱신
+            if (response.getAccessToken() != null) {
+                setAccessTokenCookie(httpResponse, response.getAccessToken());
+            }
+
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Token refresh error: {}", e.getMessage());
@@ -124,7 +142,8 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<Map<String, String>> logout(
             @RequestBody LogoutRequest request,
-            Authentication authentication
+            Authentication authentication,
+            HttpServletResponse httpResponse
     ) {
         try {
             String email = authentication.getName();
@@ -134,6 +153,9 @@ public class AuthController {
             } else {
                 authService.logout(request.getRefreshToken(), email);
             }
+
+            // 쿠키 제거
+            clearAccessTokenCookie(httpResponse);
 
             Map<String, String> response = new HashMap<>();
             response.put("message", "Logged out successfully");
@@ -243,5 +265,30 @@ public class AuthController {
             error.put("error", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
         }
+    }
+
+    // ========== 유틸리티 메서드 ==========
+
+    private void setAccessTokenCookie(HttpServletResponse response, String accessToken) {
+        long maxAge = jwtUtil.getJwtExpiration() / 1000;
+        ResponseCookie cookie = ResponseCookie.from("hyfata_access_token", accessToken)
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(maxAge)
+                .build();
+        response.addHeader("Set-Cookie", cookie.toString());
+    }
+
+    private void clearAccessTokenCookie(HttpServletResponse response) {
+        ResponseCookie cookie = ResponseCookie.from("hyfata_access_token", "")
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(0)
+                .build();
+        response.addHeader("Set-Cookie", cookie.toString());
     }
 }

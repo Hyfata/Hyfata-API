@@ -201,10 +201,16 @@ public class OAuthServiceImpl implements OAuthService {
 
     @Override
     public boolean validateRedirectUri(String clientId, String redirectUri) {
+        if (redirectUri == null || redirectUri.isBlank()) {
+            return false;
+        }
+        String trimmedRedirectUri = redirectUri.trim();
         return clientRepository.findByClientId(clientId)
                 .map(client -> {
                     String[] redirectUris = client.getRedirectUris().split(",");
-                    return Arrays.asList(redirectUris).contains(redirectUri);
+                    return Arrays.stream(redirectUris)
+                            .map(String::trim)
+                            .anyMatch(uri -> uri.equals(trimmedRedirectUri));
                 })
                 .orElse(false);
     }
