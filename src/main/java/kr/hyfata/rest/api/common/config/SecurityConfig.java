@@ -57,6 +57,7 @@ public class SecurityConfig {
                         .requestMatchers("/").permitAll()
                         .requestMatchers("/health").permitAll()
                         .requestMatchers("/reset-password").permitAll()
+                        .requestMatchers("/verify-email").permitAll()
                         // Swagger/OpenAPI 관련 엔드포인트 (필요시 추가)
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
                         // 그 외 모든 요청은 인증 필요

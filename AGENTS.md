@@ -298,6 +298,11 @@ public class AuthServiceImpl implements AuthService { ... }
 
 ## 개발 시 주의사항
 
+### API 문서 동기화
+
+- **인증/인가 관련 API**(`auth` 모듈)의 요청/응답 스펙, 엔드포인트, DTO 등을 변경한 경우, 반드시 **`docs/auth/AUTH_API.md`** 를 함께 수정하세요.
+- Agora 모듈의 API를 변경한 경우, **`docs/agora/api/`** 내 해당 문서를 함께 수정하세요.
+
 ### Agora 모듈 개발
 
 - Agora 도메인의 **컨트롤러를 새로 작성**할 때, `docs/agora/api/` 문서를 참고하세요. 문서에는 요청/응답 스펙, URL 매핑, Flutter 연동 가이드가 상세히 기술되어 있습니다.
