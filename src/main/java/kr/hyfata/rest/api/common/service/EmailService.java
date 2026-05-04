@@ -32,6 +32,9 @@ public class EmailService {
     @Value("${app.frontend.url:http://localhost:3000}")
     private String defaultFrontendUrl;
 
+    @Value("${app.backend.url:http://localhost:8080}")
+    private String backendUrl;
+
     @Value("${spring.mail.enabled:true}")
     private boolean mailEnabled;
 
@@ -68,6 +71,9 @@ public class EmailService {
 
     /**
      * 비밀번호 재설정 이메일 발송 (비동기)
+     * <p>
+     * 링크는 API 서버의 /reset-password 페이지로 발송되어,
+     * 별도의 프론트엔드 없이도 브라우저에서 직접 비밀번호를 재설정할 수 있습니다.
      *
      * @param to 받는 사람 이메일
      * @param resetToken 재설정 토큰
@@ -81,8 +87,7 @@ public class EmailService {
                 return;
             }
 
-            String frontendUrl = getFrontendUrl(clientId);
-            String resetLink = frontendUrl + "/reset-password?token=" + resetToken;
+            String resetLink = backendUrl + "/reset-password?token=" + resetToken;
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(to);
