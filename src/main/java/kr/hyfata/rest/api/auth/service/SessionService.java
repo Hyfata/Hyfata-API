@@ -80,4 +80,10 @@ public interface SessionService {
      * Refresh Token 해시 생성
      */
     String hashToken(String token);
+
+    /**
+     * OAuth 서버사이드 세션(Redis)을 포함한 모든 세션 무효화
+     * @param userEmail 사용자 이메일
+     */
+    void revokeAllOAuthSessions(String userEmail);
 }

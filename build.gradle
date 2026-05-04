@@ -35,8 +35,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'me.paulschwarz:spring-dotenv:2.5.4'
 
-    // Session Management - Redis (블랙리스트용)
+    // Session Management - Redis (블랙리스트용 + 서버사이드 세션)
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.session:spring-session-data-redis'
 
     // Session Management - User-Agent 파싱
     implementation 'com.github.ua-parser:uap-java:1.6.1'

@@ -248,6 +248,7 @@ public class AuthServiceImpl implements AuthService { ... }
 - **Refresh Token**: 14일(`jwt.refresh-expiration=1209600000`)
 - **JTI (JWT ID)**: 각 Access Token에 고유 JTI를 포함하며, 로그아웃 시 Redis 블랙리스트에 등록됩니다.
 - **민감 엔드포인트**: `security.sensitive-endpoints`에 설정된 경로는 블랙리스트된 토큰으로 접근 불가.
+- **OAuth 로그인 세션**: `/oauth/login`, `/oauth/authorize`는 서버사이드 세션(`Spring Session + Redis`) 기반. 브라우저는 `HYFATA_SESSION` 쿠키로 세션을 유지하며, JWT는 `/oauth/token` 발급 시에만 사용됩니다.
 
 ### OAuth 2.0 + PKCE
 
@@ -257,9 +258,10 @@ public class AuthServiceImpl implements AuthService { ... }
 
 ### 세션 관리
 
-- 사용자당 최대 5개 세션 (`session.max-per-user=5`)
+- **API 세션 (JWT 기반)**: 사용자당 최대 5개 동시 세션 (`session.max-per-user=5`). `user_sessions` 테이블에 Refresh Token 해시로 관리됩니다.
+- **OAuth 브라우저 세션 (서버사이드 세션)**: `/oauth/login`, `/oauth/authorize`는 `Spring Session + Redis` 기반. `HYFATA_SESSION` 쿠키로 유지됩니다.
 - 토큰 로테이션: Refresh 시 새 Refresh Token 발급, 기존 세션 무효화
-- 비밀번호 변경 시 모든 세션 무효화
+- 비밀번호 변경 시 모든 세션 무효화 (API 세션 + OAuth 브라우저 세션 모두 무효화)
 
 ### 비밀번호
 
@@ -309,7 +311,9 @@ public class AuthServiceImpl implements AuthService { ... }
 
 ### Redis
 
-- Redis는 **토큰 블랙리스트** 용도로만 사용됩니다. 세션 데이터는 PostgreSQL의 `user_sessions` 테이블에 저장됩니다.
+- Redis는 **토큰 블랙리스트** 및 **OAuth 서버사이드 세션 저장** 용도로 사용됩니다.
+- API 세션 데이터(Refresh Token 기반)는 PostgreSQL의 `user_sessions` 테이블에 저장됩니다.
+- OAuth 브라우저 세션은 `Spring Session Data Redis`를 통해 Redis에 저장됩니다.
 - `TokenBlacklistService`를 통해 JTI의 블랙리스트 등록/조회를 수행합니다.
 
 ### GeoIP

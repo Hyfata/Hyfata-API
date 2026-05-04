@@ -15,8 +15,11 @@ import kr.hyfata.rest.api.common.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.session.FindByIndexNameSessionRepository;
+import org.springframework.session.Session;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +40,9 @@ public class SessionServiceImpl implements SessionService {
     private final DeviceDetector deviceDetector;
     private final GeoIpService geoIpService;
     private final JwtUtil jwtUtil;
+
+    @Autowired(required = false)
+    private FindByIndexNameSessionRepository<? extends Session> indexedSessionRepository;
 
     @Value("${session.max-per-user:5}")
     private int maxSessionsPerUser;
@@ -197,6 +203,25 @@ public class SessionServiceImpl implements SessionService {
 
         int revokedCount = sessionRepository.revokeAllByUser(user);
         log.info("All sessions revoked for user: {}. Count: {}", userEmail, revokedCount);
+
+        // OAuth 서버사이드 세션(Redis)도 무효화
+        revokeAllOAuthSessions(userEmail);
+    }
+
+    @Override
+    public void revokeAllOAuthSessions(String userEmail) {
+        if (indexedSessionRepository == null) {
+            log.warn("IndexedSessionRepository is not available, skipping OAuth session revocation");
+            return;
+        }
+
+        var sessions = indexedSessionRepository.findByPrincipalName(userEmail);
+        if (sessions != null && !sessions.isEmpty()) {
+            sessions.forEach((id, session) -> {
+                indexedSessionRepository.deleteById(id);
+                log.info("Revoked OAuth server-side session: {} for user: {}", id, userEmail);
+            });
+        }
     }
 
     @Override

@@ -40,6 +40,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         try {
+            // 이미 세션에서 복원된 인증 정보가 있으면 JWT 검증 스킵 (OAuth 서버사이드 세션 지원)
+            if (SecurityContextHolder.getContext().getAuthentication() != null) {
+                log.debug("Authentication already present in SecurityContext (session-based), skipping JWT validation");
+                filterChain.doFilter(request, response);
+                return;
+            }
+
             final String jwt = extractJwtFromRequest(request);
 
             log.debug("JWT from request: {}", jwt != null ? "present" : "null");

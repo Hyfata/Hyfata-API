@@ -2,6 +2,7 @@ package kr.hyfata.rest.api.auth.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import kr.hyfata.rest.api.auth.dto.OAuthTokenResponse;
 import kr.hyfata.rest.api.auth.dto.PasswordResetRequest;
 import kr.hyfata.rest.api.auth.dto.RegisterRequest;
@@ -10,15 +11,18 @@ import kr.hyfata.rest.api.auth.repository.UserRepository;
 import kr.hyfata.rest.api.auth.service.AuthService;
 import kr.hyfata.rest.api.auth.service.ClientService;
 import kr.hyfata.rest.api.auth.service.OAuthService;
-import kr.hyfata.rest.api.common.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -30,6 +34,9 @@ import java.util.UUID;
 /**
  * OAuth 2.0 Authorization Code Flow 구현
  * Google OAuth, Discord OAuth와 유사한 구조
+ *
+ * /oauth/login, /oauth/authorize는 서버사이드 세션(Spring Session + Redis) 기반
+ * /oauth/token은 기존 JWT 기반 유지
  */
 @Controller
 @RequestMapping("/oauth")
@@ -41,14 +48,14 @@ public class OAuthController {
     private final ClientService clientService;
     private final AuthService authService;
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtUtil jwtUtil;
+    private final AuthenticationManager authenticationManager;
 
     /**
      * 1단계: Authorization 요청
      * GET /oauth/authorize?client_id=xxx&redirect_uri=xxx&state=xxx&response_type=code&code_challenge=xxx&code_challenge_method=xxx
      *
      * 이미 Hyfata에 로그인된 사용자는 자동으로 authorization code를 발급받습니다.
+     * (서버사이드 세션 기반)
      */
     @GetMapping("/authorize")
     public String authorize(
@@ -86,8 +93,8 @@ public class OAuthController {
                 state = UUID.randomUUID().toString();
             }
 
-            // 이미 로그인된 사용자 확인 (쿠키 기반 세션)
-            User autoUser = getUserFromCookie(request);
+            // 이미 로그인된 사용자 확인 (서버사이드 세션 기반)
+            User autoUser = getAuthenticatedUser();
             if (autoUser != null) {
                 if (!autoUser.isEnabled()) {
                     model.addAttribute("error", "비활성화된 계정입니다.");
@@ -138,6 +145,8 @@ public class OAuthController {
     /**
      * 2단계: 로그인 처리 및 Authorization Code 생성
      * POST /oauth/login
+     *
+     * 서버사이드 세션(Redis)에 인증 정보를 저장합니다.
      */
     @PostMapping("/login")
     public String login(
@@ -149,42 +158,52 @@ public class OAuthController {
             @RequestParam(required = false) String code_challenge,
             @RequestParam(required = false) String code_challenge_method,
             Model model,
+            HttpServletRequest request,
             HttpServletResponse response) {
 
         try {
-            // 1. 사용자 조회
+            // 1. Spring Security AuthenticationManager로 인증
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(email, password)
+            );
+
+            // 2. SecurityContext에 인증 정보 설정
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+
+            // 3. HttpSession에 SecurityContext 저장 (Spring Session → Redis)
+            HttpSession session = request.getSession(true);
+            session.setAttribute(
+                    HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
+                    SecurityContextHolder.getContext()
+            );
+            // Spring Session 인덱싱용 principal 이름 저장 (세션 조회/무효화 지원)
+            session.setAttribute(
+                    FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME,
+                    email
+            );
+
+            // 4. 사용자 정보 조회
             User user = userRepository.findByEmail(email)
-                    .orElseThrow(() -> new Exception("이메일 또는 비밀번호가 올바르지 않습니다."));
+                    .orElseThrow(() -> new Exception("사용자를 찾을 수 없습니다."));
 
-            // 2. 비밀번호 검증
-            if (!passwordEncoder.matches(password, user.getPassword())) {
-                throw new Exception("이메일 또는 비밀번호가 올바르지 않습니다.");
-            }
-
-            // 3. 사용자 활성화 상태 확인
+            // 5. 사용자 상태 확인
             if (!user.isEnabled()) {
                 throw new Exception("비활성화된 계정입니다.");
             }
-
-            // 4. 이메일 검증 여부 확인
             if (!user.getEmailVerified()) {
                 throw new Exception("이메일 인증이 필요합니다.");
             }
 
-            // 5. Authorization Code 생성 (PKCE 파라미터 포함)
+            // 6. Authorization Code 생성 (PKCE 파라미터 포함)
             String authCode;
             if (code_challenge != null && !code_challenge.isEmpty()) {
                 authCode = oAuthService.generateAuthorizationCode(client_id, email, redirect_uri, state,
-                                                                    code_challenge, code_challenge_method);
+                        code_challenge, code_challenge_method);
                 log.info("Authorization code generated with PKCE: email={}, client_id={}", email, client_id);
             } else {
                 authCode = oAuthService.generateAuthorizationCode(client_id, email, redirect_uri, state);
                 log.info("Authorization code generated: email={}, client_id={}", email, client_id);
             }
-
-            // 6. 쿠키에 JWT 설정 (세션 유지)
-            String accessToken = jwtUtil.generateAccessToken(user);
-            setAccessTokenCookie(response, accessToken);
 
             // 7. 리다이렉트 URL 구성: redirect_uri?code=xxx&state=xxx
             String redirectUrl = redirect_uri + "?code=" + authCode + "&state=" + state;
@@ -192,6 +211,18 @@ public class OAuthController {
             log.info("User logged in and authorized: email={}, client_id={}", email, client_id);
             return "redirect:" + redirectUrl;
 
+        } catch (BadCredentialsException e) {
+            log.warn("Login error: {}", e.getMessage());
+            model.addAttribute("error", "이메일 또는 비밀번호가 올바르지 않습니다.");
+            model.addAttribute("email", email);
+            model.addAttribute("client_id", client_id);
+            model.addAttribute("client_name", clientService.validateClient(client_id)
+                    .map(c -> c.getName()).orElse(client_id));
+            model.addAttribute("redirect_uri", redirect_uri);
+            model.addAttribute("state", state);
+            model.addAttribute("code_challenge", code_challenge);
+            model.addAttribute("code_challenge_method", code_challenge_method);
+            return "oauth/login";
         } catch (Exception e) {
             log.warn("Login error: {}", e.getMessage());
             model.addAttribute("error", e.getMessage());
@@ -210,6 +241,8 @@ public class OAuthController {
     /**
      * 3단계: Authorization Code를 Token으로 교환 또는 Refresh Token으로 갱신
      * POST /oauth/token
+     *
+     * 기존 JWT 기반 그대로 유지
      */
     @PostMapping("/token")
     @ResponseBody
@@ -281,7 +314,7 @@ public class OAuthController {
     }
 
     /**
-     * OAuth 로그아웃 (세션 무효화 및 토큰 블랙리스트)
+     * OAuth 로그아웃 (서버사이드 세션 무효화 및 토큰 블랙리스트)
      * POST /oauth/logout
      */
     @PostMapping("/logout")
@@ -290,6 +323,7 @@ public class OAuthController {
             @RequestParam(required = false) String refresh_token,
             @RequestBody(required = false) Map<String, String> body,
             Authentication authentication,
+            HttpServletRequest request,
             HttpServletResponse response) {
 
         try {
@@ -306,8 +340,15 @@ public class OAuthController {
 
             oAuthService.logout(email, token);
 
-            // 쿠키 제거
-            clearAccessTokenCookie(response);
+            // 서버사이드 세션 무효화 (Redis)
+            HttpSession session = request.getSession(false);
+            if (session != null) {
+                session.invalidate();
+                log.info("Server-side session invalidated for user: {}", email);
+            }
+
+            // SecurityContext 클리어
+            SecurityContextHolder.clearContext();
 
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
@@ -545,40 +586,17 @@ public class OAuthController {
 
     // ========== 유틸리티 메서드 ==========
 
-    private User getUserFromCookie(HttpServletRequest request) {
-        if (request.getCookies() == null) return null;
-        for (jakarta.servlet.http.Cookie cookie : request.getCookies()) {
-            if ("hyfata_access_token".equals(cookie.getName())) {
-                String token = cookie.getValue();
-                if (jwtUtil.validateToken(token)) {
-                    String email = jwtUtil.extractEmail(token);
-                    return userRepository.findByEmail(email).orElse(null);
-                }
-            }
+    /**
+     * Spring Security Context에서 인증된 사용자를 조회합니다.
+     * 서버사이드 세션(Redis) 기반입니다.
+     */
+    private User getAuthenticatedUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated()
+                && authentication.getPrincipal() instanceof UserDetails) {
+            String email = authentication.getName();
+            return userRepository.findByEmail(email).orElse(null);
         }
         return null;
-    }
-
-    private void setAccessTokenCookie(HttpServletResponse response, String accessToken) {
-        long maxAge = jwtUtil.getJwtExpiration() / 1000;
-        ResponseCookie cookie = ResponseCookie.from("hyfata_access_token", accessToken)
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("Lax")
-                .path("/")
-                .maxAge(maxAge)
-                .build();
-        response.addHeader("Set-Cookie", cookie.toString());
-    }
-
-    private void clearAccessTokenCookie(HttpServletResponse response) {
-        ResponseCookie cookie = ResponseCookie.from("hyfata_access_token", "")
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("Lax")
-                .path("/")
-                .maxAge(0)
-                .build();
-        response.addHeader("Set-Cookie", cookie.toString());
     }
 }
