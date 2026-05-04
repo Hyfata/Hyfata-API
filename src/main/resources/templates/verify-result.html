@@ -102,7 +102,9 @@
         <h1 th:text="${success} ? '인증 완료' : '인증 실패'"></h1>
         <p th:text="${message}"></p>
 
-        <a href="/" class="btn">홈으로</a>
+        <p th:if="${success}" style="font-size: 13px; color: #888; margin-top: 16px;">
+            이전 페이지로 돌아가 로그인을 완료해 주세요.
+        </p>
     </div>
 </body>
 </html>
