@@ -34,7 +34,7 @@ public class AuthController {
         try {
             authService.register(request);
             Map<String, String> response = new HashMap<>();
-            response.put("message", "Registration successful. Please check your email to verify your account.");
+            response.put("message", "회원가입이 완료되었습니다. 이메일을 확인하여 계정을 인증해 주세요.");
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (Exception e) {
             log.error("Registration error: {}", e.getMessage());
@@ -57,7 +57,7 @@ public class AuthController {
     ) {
         try {
             AuthResponse response = authService.login(request, httpRequest);
-            response.setDeprecationWarning("This endpoint is deprecated. Please use OAuth 2.0 (/oauth/authorize) for better security.");
+            response.setDeprecationWarning("이 엔드포인트는 더 이상 사용되지 않습니다. 보안을 위해 OAuth 2.0 (/oauth/authorize)을 사용하세요.");
 
             // 쿠키 설정 (세션 유지)
             if (response.getAccessToken() != null) {
@@ -118,7 +118,7 @@ public class AuthController {
     ) {
         try {
             AuthResponse response = authService.refreshToken(request, httpRequest);
-            response.setDeprecationWarning("This endpoint is deprecated. Please use OAuth 2.0 (/oauth/token with grant_type=refresh_token) for better security.");
+            response.setDeprecationWarning("이 엔드포인트는 더 이상 사용되지 않습니다. 보안을 위해 OAuth 2.0 (/oauth/token, grant_type=refresh_token)을 사용하세요.");
 
             // 쿠키 갱신
             if (response.getAccessToken() != null) {
@@ -158,7 +158,7 @@ public class AuthController {
             clearAccessTokenCookie(httpResponse);
 
             Map<String, String> response = new HashMap<>();
-            response.put("message", "Logged out successfully");
+            response.put("message", "로그아웃되었습니다.");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Logout error: {}", e.getMessage());
@@ -179,7 +179,7 @@ public class AuthController {
             String clientId = request.getOrDefault("clientId", "default");
             authService.requestPasswordReset(email, clientId);
             Map<String, String> response = new HashMap<>();
-            response.put("message", "Password reset link has been sent to your email");
+            response.put("message", "비밀번호 재설정 링크가 이메일로 발송되었습니다.");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Password reset request error: {}", e.getMessage());
@@ -198,7 +198,7 @@ public class AuthController {
         try {
             authService.resetPassword(request);
             Map<String, String> response = new HashMap<>();
-            response.put("message", "Password reset successful");
+            response.put("message", "비밀번호가 성공적으로 변경되었습니다.");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Password reset error: {}", e.getMessage());
@@ -217,7 +217,7 @@ public class AuthController {
         try {
             authService.verifyEmail(token);
             Map<String, String> response = new HashMap<>();
-            response.put("message", "Email verified successfully");
+            response.put("message", "이메일 인증이 완료되었습니다.");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Email verification error: {}", e.getMessage());
@@ -237,7 +237,7 @@ public class AuthController {
             String email = authentication.getName();
             authService.enableTwoFactor(email);
             Map<String, String> response = new HashMap<>();
-            response.put("message", "Two-factor authentication enabled");
+            response.put("message", "2단계 인증이 활성화되었습니다.");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Enable 2FA error: {}", e.getMessage());
@@ -257,7 +257,7 @@ public class AuthController {
             String email = authentication.getName();
             authService.disableTwoFactor(email);
             Map<String, String> response = new HashMap<>();
-            response.put("message", "Two-factor authentication disabled");
+            response.put("message", "2단계 인증이 비활성화되었습니다.");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Disable 2FA error: {}", e.getMessage());

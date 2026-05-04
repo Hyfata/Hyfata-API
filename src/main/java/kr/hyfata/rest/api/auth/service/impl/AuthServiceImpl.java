@@ -46,16 +46,16 @@ public class AuthServiceImpl implements AuthService {
     public void register(RegisterRequest request) {
         // 클라이언트 검증
         if (clientService.validateClient(request.getClientId()).isEmpty()) {
-            throw new BadCredentialsException("Invalid or disabled client");
+            throw new BadCredentialsException("유효하지 않거나 비활성화된 클라이언트입니다.");
         }
 
         // 중복 확인
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new BadCredentialsException("Email already registered");
+            throw new BadCredentialsException("이미 등록된 이메일입니다.");
         }
 
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new BadCredentialsException("Username already taken");
+            throw new BadCredentialsException("이미 사용 중인 사용자 이름입니다.");
         }
 
         // 사용자 생성
@@ -86,14 +86,14 @@ public class AuthServiceImpl implements AuthService {
         }
 
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
+                .orElseThrow(() -> new BadCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다."));
 
         if (!user.isEnabled()) {
-            throw new BadCredentialsException("Account is disabled");
+            throw new BadCredentialsException("비활성화된 계정입니다.");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new BadCredentialsException("Invalid email or password");
+            throw new BadCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다.");
         }
 
         // 2FA 활성화 시
@@ -105,7 +105,7 @@ public class AuthServiceImpl implements AuthService {
 
             emailService.sendTwoFactorEmail(user.getEmail(), twoFactorCode, request.getClientId());
 
-            return AuthResponse.twoFactorRequired("Please check your email for the 2FA code");
+            return AuthResponse.twoFactorRequired("이메일로 전송된 인증 코드를 입력해 주세요.");
         }
 
         // 토큰 생성 (JTI 포함)
@@ -124,14 +124,14 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public AuthResponse verifyTwoFactor(TwoFactorRequest request, HttpServletRequest httpRequest) {
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
+                .orElseThrow(() -> new BadCredentialsException("사용자를 찾을 수 없습니다."));
 
         if (user.getTwoFactorCode() == null || !user.getTwoFactorCode().equals(request.getCode())) {
-            throw new BadCredentialsException("Invalid 2FA code");
+            throw new BadCredentialsException("인증 코드가 올바르지 않습니다.");
         }
 
         if (LocalDateTime.now().isAfter(user.getTwoFactorCodeExpiredAt())) {
-            throw new BadCredentialsException("2FA code expired");
+            throw new BadCredentialsException("인증 코드가 만료되었습니다.");
         }
 
         // 코드 정리
@@ -156,17 +156,17 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse refreshToken(RefreshTokenRequest request, HttpServletRequest httpRequest) {
         // JWT 서명 검증
         if (!jwtUtil.validateToken(request.getRefreshToken())) {
-            throw new BadCredentialsException("Invalid refresh token");
+            throw new BadCredentialsException("유효하지 않은 리프레시 토큰입니다.");
         }
 
         // 세션 검증 (DB)
         if (!sessionService.validateSession(request.getRefreshToken())) {
-            throw new BadCredentialsException("Session is invalid or revoked");
+            throw new BadCredentialsException("세션이 유효하지 않거나 해지되었습니다.");
         }
 
         String email = jwtUtil.extractEmail(request.getRefreshToken());
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
+                .orElseThrow(() -> new BadCredentialsException("사용자를 찾을 수 없습니다."));
 
         // 새 토큰 생성 (토큰 로테이션)
         JwtUtil.TokenResult newTokenResult = jwtUtil.generateAccessTokenWithJti(user);
@@ -201,11 +201,11 @@ public class AuthServiceImpl implements AuthService {
     public void requestPasswordReset(String email, String clientId) {
         // 클라이언트 검증
         if (clientService.validateClient(clientId).isEmpty()) {
-            throw new BadCredentialsException("Invalid or disabled client");
+            throw new BadCredentialsException("유효하지 않거나 비활성화된 클라이언트입니다.");
         }
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
+                .orElseThrow(() -> new BadCredentialsException("사용자를 찾을 수 없습니다."));
 
         String resetToken = tokenGenerator.generatePasswordResetToken();
         user.setResetPasswordToken(resetToken);
@@ -221,14 +221,14 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void resetPassword(PasswordResetRequest request) {
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
-            throw new BadCredentialsException("Passwords do not match");
+            throw new BadCredentialsException("비밀번호가 일치하지 않습니다.");
         }
 
         User user = userRepository.findByResetPasswordToken(request.getToken())
-                .orElseThrow(() -> new BadCredentialsException("Invalid reset token"));
+                .orElseThrow(() -> new BadCredentialsException("유효하지 않거나 만료된 재설정 토큰입니다."));
 
         if (LocalDateTime.now().isAfter(user.getResetPasswordTokenExpiredAt())) {
-            throw new BadCredentialsException("Reset token expired");
+            throw new BadCredentialsException("재설정 링크가 만료되었습니다.");
         }
 
         // 비밀번호 업데이트
@@ -246,7 +246,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void verifyEmail(String token) {
         User user = userRepository.findByEmailVerificationToken(token)
-                .orElseThrow(() -> new BadCredentialsException("Invalid verification token"));
+                .orElseThrow(() -> new BadCredentialsException("유효하지 않거나 만료된 인증 토큰입니다."));
 
         user.setEmailVerified(true);
         user.setEmailVerificationToken(null);
@@ -258,24 +258,24 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void enableTwoFactor(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
+                .orElseThrow(() -> new BadCredentialsException("사용자를 찾을 수 없습니다."));
 
         user.setTwoFactorEnabled(true);
         userRepository.save(user);
 
-        log.info("2FA enabled for: {}", email);
+        log.info("2FA 활성화: {}", email);
     }
 
     @Override
     public void disableTwoFactor(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
+                .orElseThrow(() -> new BadCredentialsException("사용자를 찾을 수 없습니다."));
 
         user.setTwoFactorEnabled(false);
         user.setTwoFactorCode(null);
         user.setTwoFactorCodeExpiredAt(null);
         userRepository.save(user);
 
-        log.info("2FA disabled for: {}", email);
+        log.info("2FA 비활성화: {}", email);
     }
 }

@@ -65,19 +65,19 @@ public class OAuthController {
             // 클라이언트 검증
             var clientOpt = clientService.validateClient(client_id);
             if (clientOpt.isEmpty()) {
-                model.addAttribute("error", "Invalid client");
+                model.addAttribute("error", "유효하지 않은 클라이언트입니다.");
                 return "oauth/error";
             }
 
             // Redirect URI 검증
             if (!oAuthService.validateRedirectUri(client_id, redirect_uri)) {
-                model.addAttribute("error", "Invalid redirect URI");
+                model.addAttribute("error", "유효하지 않은 redirect URI입니다.");
                 return "oauth/error";
             }
 
             // response_type이 code가 아니면 거부
             if (!"code".equals(response_type)) {
-                model.addAttribute("error", "Unsupported response_type. Only 'code' is supported");
+                model.addAttribute("error", "지원하지 않는 response_type입니다. 'code'만 지원됩니다.");
                 return "oauth/error";
             }
 
@@ -90,11 +90,11 @@ public class OAuthController {
             User autoUser = getUserFromCookie(request);
             if (autoUser != null) {
                 if (!autoUser.isEnabled()) {
-                    model.addAttribute("error", "Account is disabled");
+                    model.addAttribute("error", "비활성화된 계정입니다.");
                     return "oauth/error";
                 }
                 if (!autoUser.getEmailVerified()) {
-                    model.addAttribute("error", "Email verification required");
+                    model.addAttribute("error", "이메일 인증이 필요합니다.");
                     return "oauth/error";
                 }
 
@@ -154,21 +154,21 @@ public class OAuthController {
         try {
             // 1. 사용자 조회
             User user = userRepository.findByEmail(email)
-                    .orElseThrow(() -> new Exception("Invalid email or password"));
+                    .orElseThrow(() -> new Exception("이메일 또는 비밀번호가 올바르지 않습니다."));
 
             // 2. 비밀번호 검증
             if (!passwordEncoder.matches(password, user.getPassword())) {
-                throw new Exception("Invalid email or password");
+                throw new Exception("이메일 또는 비밀번호가 올바르지 않습니다.");
             }
 
             // 3. 사용자 활성화 상태 확인
             if (!user.isEnabled()) {
-                throw new Exception("Account is disabled");
+                throw new Exception("비활성화된 계정입니다.");
             }
 
             // 4. 이메일 검증 여부 확인
             if (!user.getEmailVerified()) {
-                throw new Exception("Email verification required");
+                throw new Exception("이메일 인증이 필요합니다.");
             }
 
             // 5. Authorization Code 생성 (PKCE 파라미터 포함)
@@ -197,6 +197,8 @@ public class OAuthController {
             model.addAttribute("error", e.getMessage());
             model.addAttribute("email", email);
             model.addAttribute("client_id", client_id);
+            model.addAttribute("client_name", clientService.validateClient(client_id)
+                    .map(c -> c.getName()).orElse(client_id));
             model.addAttribute("redirect_uri", redirect_uri);
             model.addAttribute("state", state);
             model.addAttribute("code_challenge", code_challenge);
@@ -243,7 +245,7 @@ public class OAuthController {
 
             } else if ("refresh_token".equals(grant_type)) {
                 if (refresh_token == null || refresh_token.isEmpty()) {
-                    throw new BadCredentialsException("refresh_token is required");
+                    throw new BadCredentialsException("리프레시 토큰이 필요합니다.");
                 }
 
                 tokenResponse = oAuthService.refreshAccessToken(
@@ -345,13 +347,13 @@ public class OAuthController {
             // 클라이언트 검증
             var clientOpt = clientService.validateClient(client_id);
             if (clientOpt.isEmpty()) {
-                model.addAttribute("error", "Invalid client");
+                model.addAttribute("error", "유효하지 않은 클라이언트입니다.");
                 return "oauth/error";
             }
 
             // Redirect URI 검증
             if (!oAuthService.validateRedirectUri(client_id, redirect_uri)) {
-                model.addAttribute("error", "Invalid redirect URI");
+                model.addAttribute("error", "유효하지 않은 redirect URI입니다.");
                 return "oauth/error";
             }
 
@@ -391,13 +393,13 @@ public class OAuthController {
             // 클라이언트 검증
             var clientOpt = clientService.validateClient(client_id);
             if (clientOpt.isEmpty()) {
-                model.addAttribute("error", "Invalid client");
+                model.addAttribute("error", "유효하지 않은 클라이언트입니다.");
                 return "oauth/error";
             }
 
             // Redirect URI 검증
             if (!oAuthService.validateRedirectUri(client_id, redirect_uri)) {
-                model.addAttribute("error", "Invalid redirect URI");
+                model.addAttribute("error", "유효하지 않은 redirect URI입니다.");
                 return "oauth/error";
             }
 
@@ -455,12 +457,12 @@ public class OAuthController {
         try {
             var clientOpt = clientService.validateClient(client_id);
             if (clientOpt.isEmpty()) {
-                model.addAttribute("error", "Invalid client");
+                model.addAttribute("error", "유효하지 않은 클라이언트입니다.");
                 return "oauth/error";
             }
 
             if (!oAuthService.validateRedirectUri(client_id, redirect_uri)) {
-                model.addAttribute("error", "Invalid redirect URI");
+                model.addAttribute("error", "유효하지 않은 redirect URI입니다.");
                 return "oauth/error";
             }
 
@@ -497,12 +499,12 @@ public class OAuthController {
         try {
             var clientOpt = clientService.validateClient(client_id);
             if (clientOpt.isEmpty()) {
-                model.addAttribute("error", "Invalid client");
+                model.addAttribute("error", "유효하지 않은 클라이언트입니다.");
                 return "oauth/error";
             }
 
             if (!oAuthService.validateRedirectUri(client_id, redirect_uri)) {
-                model.addAttribute("error", "Invalid redirect URI");
+                model.addAttribute("error", "유효하지 않은 redirect URI입니다.");
                 return "oauth/error";
             }
 

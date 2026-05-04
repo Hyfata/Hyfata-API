@@ -51,20 +51,20 @@ public class OAuthServiceImpl implements OAuthService {
                                            String codeChallenge, String codeChallengeMethod) {
         // 클라이언트 검증
         Client client = clientRepository.findByClientId(clientId)
-                .orElseThrow(() -> new BadCredentialsException("Invalid client"));
+                .orElseThrow(() -> new BadCredentialsException("유효하지 않은 클라이언트입니다."));
 
         if (!client.getEnabled()) {
-            throw new BadCredentialsException("Client is disabled");
+            throw new BadCredentialsException("비활성화된 클라이언트입니다.");
         }
 
         // Redirect URI 검증
         if (!validateRedirectUri(clientId, redirectUri)) {
-            throw new BadCredentialsException("Invalid redirect URI");
+            throw new BadCredentialsException("유효하지 않은 redirect URI입니다.");
         }
 
         // 사용자 검증
         userRepository.findByEmail(email)
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
+                .orElseThrow(() -> new BadCredentialsException("사용자를 찾을 수 없습니다."));
 
         // Authorization Code 생성
         String code = tokenGenerator.generatePasswordResetToken();  // 긴 난수 토큰
@@ -106,39 +106,39 @@ public class OAuthServiceImpl implements OAuthService {
     public OAuthTokenResponse exchangeCodeForToken(String code, String clientId, String clientSecret, String redirectUri, String codeVerifier) {
         // 1. Authorization Code 검증
         AuthorizationCode authCode = authorizationCodeRepository.findByCodeAndClientId(code, clientId)
-                .orElseThrow(() -> new BadCredentialsException("Invalid authorization code"));
+                .orElseThrow(() -> new BadCredentialsException("유효하지 않은 인증 코드입니다."));
 
         // 2. 코드 만료 여부 확인
         if (LocalDateTime.now().isAfter(authCode.getExpiresAt())) {
             authorizationCodeRepository.delete(authCode);
-            throw new BadCredentialsException("Authorization code expired");
+            throw new BadCredentialsException("인증 코드가 만료되었습니다.");
         }
 
         // 3. 코드 사용 여부 확인 (한 번만 사용 가능)
         if (authCode.getUsed()) {
-            throw new BadCredentialsException("Authorization code already used");
+            throw new BadCredentialsException("이미 사용된 인증 코드입니다.");
         }
 
         // 4. Redirect URI 검증
         if (!authCode.getRedirectUri().equals(redirectUri)) {
-            throw new BadCredentialsException("Redirect URI mismatch");
+            throw new BadCredentialsException("redirect URI가 일치하지 않습니다.");
         }
 
         // 5. PKCE 검증 (code_challenge가 저장되어 있으면 code_verifier 필수)
         if (authCode.getCodeChallenge() != null && !authCode.getCodeChallenge().isEmpty()) {
             if (codeVerifier == null || codeVerifier.isEmpty()) {
-                throw new BadCredentialsException("code_verifier is required for PKCE flow");
+                throw new BadCredentialsException("PKCE 흐름에서는 code_verifier가 필요합니다.");
             }
 
             // code_verifier 유효성 검증
             if (!pkceUtil.isValidCodeVerifier(codeVerifier)) {
-                throw new BadCredentialsException("Invalid code_verifier format");
+                throw new BadCredentialsException("code_verifier 형식이 올바르지 않습니다.");
             }
 
             // code_verifier와 code_challenge 검증
             if (!pkceUtil.verifyCodeChallenge(codeVerifier, authCode.getCodeChallenge())) {
                 log.warn("PKCE verification failed: clientId={}, email={}", clientId, authCode.getEmail());
-                throw new BadCredentialsException("code_verifier verification failed");
+                throw new BadCredentialsException("code_verifier 검증에 실패했습니다.");
             }
 
             log.debug("PKCE verification successful: clientId={}, email={}", clientId, authCode.getEmail());
@@ -146,7 +146,7 @@ public class OAuthServiceImpl implements OAuthService {
 
         // 6. Client Secret 검증
         Client client = clientRepository.findByClientId(clientId)
-                .orElseThrow(() -> new BadCredentialsException("Invalid client credentials"));
+                .orElseThrow(() -> new BadCredentialsException("유효하지 않은 클라이언트 인증 정보입니다."));
 
         // BCrypt로 저장된 clientSecret과 비교
         if (!passwordEncoder.matches(clientSecret, client.getClientSecret())) {
@@ -154,12 +154,12 @@ public class OAuthServiceImpl implements OAuthService {
         }
 
         if (!client.getEnabled()) {
-            throw new BadCredentialsException("Client is disabled");
+            throw new BadCredentialsException("비활성화된 클라이언트입니다.");
         }
 
         // 7. 사용자 조회
         User user = userRepository.findByEmail(authCode.getEmail())
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
+                .orElseThrow(() -> new BadCredentialsException("사용자를 찾을 수 없습니다."));
 
         // 8. 코드 사용 표시
         authCode.setUsed(true);
@@ -227,22 +227,22 @@ public class OAuthServiceImpl implements OAuthService {
                                                    String redirectUri, String codeVerifier, HttpServletRequest request) {
         // 1. Authorization Code 검증
         AuthorizationCode authCode = authorizationCodeRepository.findByCodeAndClientId(code, clientId)
-                .orElseThrow(() -> new BadCredentialsException("Invalid authorization code"));
+                .orElseThrow(() -> new BadCredentialsException("유효하지 않은 인증 코드입니다."));
 
         // 2. 코드 만료 여부 확인
         if (LocalDateTime.now().isAfter(authCode.getExpiresAt())) {
             authorizationCodeRepository.delete(authCode);
-            throw new BadCredentialsException("Authorization code expired");
+            throw new BadCredentialsException("인증 코드가 만료되었습니다.");
         }
 
         // 3. 코드 사용 여부 확인 (한 번만 사용 가능)
         if (authCode.getUsed()) {
-            throw new BadCredentialsException("Authorization code already used");
+            throw new BadCredentialsException("이미 사용된 인증 코드입니다.");
         }
 
         // 4. Redirect URI 검증
         if (!authCode.getRedirectUri().equals(redirectUri)) {
-            throw new BadCredentialsException("Redirect URI mismatch");
+            throw new BadCredentialsException("redirect URI가 일치하지 않습니다.");
         }
 
         // 5. PKCE 또는 Client Secret 검증
@@ -251,31 +251,31 @@ public class OAuthServiceImpl implements OAuthService {
         if (isPkceFlow) {
             // Public Client (PKCE Flow) - code_verifier로 검증, client_secret 불필요
             if (codeVerifier == null || codeVerifier.isEmpty()) {
-                throw new BadCredentialsException("code_verifier is required for PKCE flow");
+                throw new BadCredentialsException("PKCE 흐름에서는 code_verifier가 필요합니다.");
             }
 
             // code_verifier 유효성 검증
             if (!pkceUtil.isValidCodeVerifier(codeVerifier)) {
-                throw new BadCredentialsException("Invalid code_verifier format");
+                throw new BadCredentialsException("code_verifier 형식이 올바르지 않습니다.");
             }
 
             // code_verifier와 code_challenge 검증
             if (!pkceUtil.verifyCodeChallenge(codeVerifier, authCode.getCodeChallenge())) {
                 log.warn("PKCE verification failed: clientId={}, email={}", clientId, authCode.getEmail());
-                throw new BadCredentialsException("code_verifier verification failed");
+                throw new BadCredentialsException("code_verifier 검증에 실패했습니다.");
             }
 
             log.debug("PKCE verification successful: clientId={}, email={}", clientId, authCode.getEmail());
         } else {
             // Confidential Client - client_secret으로 검증
             if (clientSecret == null || clientSecret.isEmpty()) {
-                throw new BadCredentialsException("client_secret is required for non-PKCE flow");
+                throw new BadCredentialsException("PKCE가 아닌 흐름에서는 client_secret이 필요합니다.");
             }
         }
 
         // 6. Client 검증
         Client client = clientRepository.findByClientId(clientId)
-                .orElseThrow(() -> new BadCredentialsException("Invalid client"));
+                .orElseThrow(() -> new BadCredentialsException("유효하지 않은 클라이언트입니다."));
 
         // Confidential Client인 경우 client_secret 검증
         if (!isPkceFlow) {
@@ -285,12 +285,12 @@ public class OAuthServiceImpl implements OAuthService {
         }
 
         if (!client.getEnabled()) {
-            throw new BadCredentialsException("Client is disabled");
+            throw new BadCredentialsException("비활성화된 클라이언트입니다.");
         }
 
         // 7. 사용자 조회
         User user = userRepository.findByEmail(authCode.getEmail())
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
+                .orElseThrow(() -> new BadCredentialsException("사용자를 찾을 수 없습니다."));
 
         // 8. 코드 사용 표시
         authCode.setUsed(true);
@@ -331,24 +331,24 @@ public class OAuthServiceImpl implements OAuthService {
 
         // 2. 세션 유효성 검증 (DB)
         if (!sessionService.validateSession(refreshToken)) {
-            throw new BadCredentialsException("Session has been revoked");
+            throw new BadCredentialsException("세션이 해지되었습니다.");
         }
 
         // 3. 세션에서 PKCE 여부 확인
         String oldSessionHash = sessionService.hashToken(refreshToken);
         UserSession oldSession = userSessionRepository.findById(oldSessionHash)
-                .orElseThrow(() -> new BadCredentialsException("Session not found"));
+                .orElseThrow(() -> new BadCredentialsException("세션을 찾을 수 없습니다."));
 
         boolean isPkceFlow = oldSession.getPkceFlow() != null && oldSession.getPkceFlow();
 
         // 4. Client 검증
         Client client = clientRepository.findByClientId(clientId)
-                .orElseThrow(() -> new BadCredentialsException("Invalid client"));
+                .orElseThrow(() -> new BadCredentialsException("유효하지 않은 클라이언트입니다."));
 
         // Confidential Client (PKCE 아님)인 경우 client_secret 검증
         if (!isPkceFlow) {
             if (clientSecret == null || clientSecret.isEmpty()) {
-                throw new BadCredentialsException("client_secret is required for non-PKCE session");
+                throw new BadCredentialsException("PKCE가 아닌 세션에서는 client_secret이 필요합니다.");
             }
             if (!passwordEncoder.matches(clientSecret, client.getClientSecret())) {
                 throw new BadCredentialsException("Invalid client credentials");
@@ -356,13 +356,13 @@ public class OAuthServiceImpl implements OAuthService {
         }
 
         if (!client.getEnabled()) {
-            throw new BadCredentialsException("Client is disabled");
+            throw new BadCredentialsException("비활성화된 클라이언트입니다.");
         }
 
         // 5. 사용자 조회
         String email = jwtUtil.extractEmail(refreshToken);
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
+                .orElseThrow(() -> new BadCredentialsException("사용자를 찾을 수 없습니다."));
 
         // 6. 기존 세션에서 이전 Access Token JTI 가져와서 블랙리스트 등록
         if (oldSession.getAccessTokenJti() != null) {
