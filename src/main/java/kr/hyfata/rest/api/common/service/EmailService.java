@@ -1,22 +1,22 @@
 package kr.hyfata.rest.api.common.service;
 
-import kr.hyfata.rest.api.auth.dto.ClientResponse;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 import kr.hyfata.rest.api.auth.service.ClientService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
  * 이메일 서비스
  * <p>
- * 비동기로 이메일을 발송하여 API 응답을 지연시키지 않습니다.
+ * 비동기로 HTML 이메일을 발송하여 API 응답을 지연시키지 않습니다.
  * 메일 발송 실패는 로그에만 기록되며, 비즈니스 로직에는 영향을 주지 않습니다.
- * clientId를 받아 동적으로 frontendUrl을 결정합니다 (OAuth 방식).
  */
 @Service
 @RequiredArgsConstructor
@@ -24,13 +24,9 @@ import org.springframework.stereotype.Service;
 public class EmailService {
 
     private final JavaMailSender mailSender;
-    private final ClientService clientService;
 
     @Value("${spring.mail.from:noreply@hyfata.com}")
     private String fromEmail;
-
-    @Value("${app.frontend.url:http://localhost:3000}")
-    private String defaultFrontendUrl;
 
     @Value("${app.backend.url:http://localhost:8080}")
     private String backendUrl;
@@ -40,117 +36,114 @@ public class EmailService {
 
     /**
      * 2FA 코드 이메일 발송 (비동기)
-     *
-     * @param to 받는 사람 이메일
-     * @param code 2FA 코드
-     * @param clientId OAuth 클라이언트 ID
      */
     @Async
     public void sendTwoFactorEmail(String to, String code, String clientId) {
         try {
             if (!mailEnabled) {
-                log.warn("Mail is disabled. Skipping 2FA email to: {}", to);
+                log.warn("메일 발송이 비활성화되어 있습니다. 2FA 메일을 건 넘깁니다: {}", to);
                 return;
             }
 
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromEmail);
-            message.setTo(to);
-            message.setSubject("Your Two-Factor Authentication Code");
-            message.setText("Your authentication code is: " + code + "\n\nThis code will expire in 10 minutes.");
-
-            mailSender.send(message);
-            log.info("2FA email sent successfully to: {} (client: {})", to, clientId);
-        } catch (MailException e) {
-            log.error("Failed to send 2FA email to {}: {}", to, e.getMessage(), e);
-            // 이메일 실패는 비즈니스 로직에 영향을 주지 않음
+            String subject = "Hyfata 인증 코드";
+            String html = buildTwoFactorHtml(code);
+            sendHtmlEmail(to, subject, html);
+            log.info("2FA 이메일 발송 성공: {} (client: {})", to, clientId);
         } catch (Exception e) {
-            log.error("Unexpected error while sending 2FA email to {}: {}", to, e.getMessage(), e);
+            log.error("2FA 이메일 발송 실패 {}: {}", to, e.getMessage(), e);
         }
     }
 
     /**
      * 비밀번호 재설정 이메일 발송 (비동기)
-     * <p>
-     * 링크는 API 서버의 /reset-password 페이지로 발송되어,
-     * 별도의 프론트엔드 없이도 브라우저에서 직접 비밀번호를 재설정할 수 있습니다.
-     *
-     * @param to 받는 사람 이메일
-     * @param resetToken 재설정 토큰
-     * @param clientId OAuth 클라이언트 ID
      */
     @Async
     public void sendPasswordResetEmail(String to, String resetToken, String clientId) {
         try {
             if (!mailEnabled) {
-                log.warn("Mail is disabled. Skipping password reset email to: {}", to);
+                log.warn("메일 발송이 비활성화되어 있습니다. 비밀번호 재설정 메일을 건 넘깁니다: {}", to);
                 return;
             }
 
             String resetLink = backendUrl + "/reset-password?token=" + resetToken;
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromEmail);
-            message.setTo(to);
-            message.setSubject("Password Reset Request");
-            message.setText("Click the link below to reset your password:\n\n" +
-                    resetLink +
-                    "\n\nThis link will expire in 1 hour.\n\n" +
-                    "If you didn't request this, please ignore this email.");
-
-            mailSender.send(message);
-            log.info("Password reset email sent successfully to: {} (client: {})", to, clientId);
-        } catch (MailException e) {
-            log.error("Failed to send password reset email to {}: {}", to, e.getMessage(), e);
-            // 이메일 실패는 비즈니스 로직에 영향을 주지 않음
+            String subject = "Hyfata 비밀번호 재설정";
+            String html = buildPasswordResetHtml(resetLink);
+            sendHtmlEmail(to, subject, html);
+            log.info("비밀번호 재설정 이메일 발송 성공: {} (client: {})", to, clientId);
         } catch (Exception e) {
-            log.error("Unexpected error while sending password reset email to {}: {}", to, e.getMessage(), e);
+            log.error("비밀번호 재설정 이메일 발송 실패 {}: {}", to, e.getMessage(), e);
         }
     }
 
     /**
-     * 회원가입 확인 이메일 발송 (비동기)
-     *
-     * @param to 받는 사람 이메일
-     * @param verificationToken 검증 토큰
-     * @param clientId OAuth 클라이언트 ID
+     * 회원가입 이메일 인증 메일 발송 (비동기)
      */
     @Async
     public void sendEmailVerificationEmail(String to, String verificationToken, String clientId) {
         try {
             if (!mailEnabled) {
-                log.warn("Mail is disabled. Skipping email verification to: {}", to);
+                log.warn("메일 발송이 비활성화되어 있습니다. 이메일 인증 메일을 건 넘깁니다: {}", to);
                 return;
             }
 
-            String frontendUrl = getFrontendUrl(clientId);
-            String verificationLink = frontendUrl + "/verify-email?token=" + verificationToken;
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromEmail);
-            message.setTo(to);
-            message.setSubject("Email Verification");
-            message.setText("Click the link below to verify your email:\n\n" +
-                    verificationLink +
-                    "\n\nThis link will expire in 24 hours.");
-
-            mailSender.send(message);
-            log.info("Email verification email sent successfully to: {} (client: {})", to, clientId);
-        } catch (MailException e) {
-            log.error("Failed to send email verification email to {}: {}", to, e.getMessage(), e);
-            // 이메일 실패는 비즈니스 로직에 영향을 주지 않음
+            String verificationLink = backendUrl + "/verify-email?token=" + verificationToken;
+            String subject = "Hyfata 이메일 인증";
+            String html = buildEmailVerificationHtml(verificationLink);
+            sendHtmlEmail(to, subject, html);
+            log.info("이메일 인증 메일 발송 성공: {} (client: {})", to, clientId);
         } catch (Exception e) {
-            log.error("Unexpected error while sending email verification to {}: {}", to, e.getMessage(), e);
+            log.error("이메일 인증 메일 발송 실패 {}: {}", to, e.getMessage(), e);
         }
     }
 
-    /**
-     * clientId를 기반으로 frontendUrl을 조회 (OAuth 방식)
-     * @param clientId OAuth 클라이언트 ID
-     * @return 클라이언트의 frontendUrl 또는 기본값
-     */
-    private String getFrontendUrl(String clientId) {
-        return clientService.getClient(clientId)
-                .map(ClientResponse::getFrontendUrl)
-                .orElse(defaultFrontendUrl);
+    private void sendHtmlEmail(String to, String subject, String html) throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+        helper.setFrom(fromEmail);
+        helper.setTo(to);
+        helper.setSubject(subject);
+        helper.setText(html, true);
+        mailSender.send(message);
     }
 
+    private String buildTwoFactorHtml(String code) {
+        return "<!DOCTYPE html>"
+                + "<html><head><meta charset='UTF-8'></head><body style='font-family:sans-serif;background:#f5f5f5;padding:40px 0;'>"
+                + "<div style='max-width:480px;margin:0 auto;background:#fff;border-radius:8px;padding:32px;box-shadow:0 4px 12px rgba(0,0,0,0.1);'>"
+                + "<h2 style='color:#001F29;margin-bottom:16px;'>Hyfata 인증 코드</h2>"
+                + "<p style='color:#555;line-height:1.6;'>아래 인증 코드를 입력해 주세요.</p>"
+                + "<div style='background:#f0f9ff;border:1px solid #00bcd4;border-radius:6px;padding:16px;text-align:center;margin:24px 0;'>"
+                + "<span style='font-size:28px;font-weight:700;color:#00bcd4;letter-spacing:4px;'>" + code + "</span>"
+                + "</div>"
+                + "<p style='color:#888;font-size:13px;'>이 코드는 10분 후에 만료됩니다.</p>"
+                + "</div></body></html>";
+    }
+
+    private String buildPasswordResetHtml(String resetLink) {
+        return "<!DOCTYPE html>"
+                + "<html><head><meta charset='UTF-8'></head><body style='font-family:sans-serif;background:#f5f5f5;padding:40px 0;'>"
+                + "<div style='max-width:480px;margin:0 auto;background:#fff;border-radius:8px;padding:32px;box-shadow:0 4px 12px rgba(0,0,0,0.1);'>"
+                + "<h2 style='color:#001F29;margin-bottom:16px;'>비밀번호 재설정</h2>"
+                + "<p style='color:#555;line-height:1.6;'>비밀번호 재설정을 요청하셨습니다. 아래 버튼을 클릭하여 새 비밀번호를 설정하세요.</p>"
+                + "<div style='text-align:center;margin:28px 0;'>"
+                + "<a href='" + resetLink + "' style='display:inline-block;background:#00bcd4;color:#fff;text-decoration:none;padding:12px 28px;border-radius:4px;font-weight:600;'>비밀번호 재설정</a>"
+                + "</div>"
+                + "<p style='color:#888;font-size:13px;'>이 링크는 1시간 후에 만료됩니다.<br>요청하신 적이 없다면 이 메일을 무시해 주세요.</p>"
+                + "<p style='color:#aaa;font-size:12px;margin-top:16px;word-break:break-all;'>링크가 안 되면 여기로 접속하세요:<br>" + resetLink + "</p>"
+                + "</div></body></html>";
+    }
+
+    private String buildEmailVerificationHtml(String verificationLink) {
+        return "<!DOCTYPE html>"
+                + "<html><head><meta charset='UTF-8'></head><body style='font-family:sans-serif;background:#f5f5f5;padding:40px 0;'>"
+                + "<div style='max-width:480px;margin:0 auto;background:#fff;border-radius:8px;padding:32px;box-shadow:0 4px 12px rgba(0,0,0,0.1);'>"
+                + "<h2 style='color:#001F29;margin-bottom:16px;'>이메일 인증</h2>"
+                + "<p style='color:#555;line-height:1.6;'>Hyfata 계정을 생성해 주셔서 감사합니다. 아래 버튼을 클릭하여 이메일 인증을 완료하세요.</p>"
+                + "<div style='text-align:center;margin:28px 0;'>"
+                + "<a href='" + verificationLink + "' style='display:inline-block;background:#00bcd4;color:#fff;text-decoration:none;padding:12px 28px;border-radius:4px;font-weight:600;'>이메일 인증하기</a>"
+                + "</div>"
+                + "<p style='color:#888;font-size:13px;'>이 링크는 24시간 후에 만료됩니다.</p>"
+                + "<p style='color:#aaa;font-size:12px;margin-top:16px;word-break:break-all;'>링크가 안 되면 여기로 접속하세요:<br>" + verificationLink + "</p>"
+                + "</div></body></html>";
+    }
 }
