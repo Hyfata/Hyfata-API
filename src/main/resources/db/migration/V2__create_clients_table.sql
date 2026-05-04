@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS clients (
     redirect_uris TEXT NOT NULL,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     max_tokens_per_user INTEGER NOT NULL DEFAULT 5,
-    owner_email VARCHAR(255),
+    owner_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
 
     -- Metadata
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -19,4 +19,4 @@ CREATE TABLE IF NOT EXISTS clients (
 -- Create Indexes
 CREATE INDEX idx_clients_client_id ON clients(client_id);
 CREATE INDEX idx_clients_enabled ON clients(enabled);
-CREATE INDEX idx_clients_owner_email ON clients(owner_email);
+CREATE INDEX idx_clients_owner_id ON clients(owner_id);

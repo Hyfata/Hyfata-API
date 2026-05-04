@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.LocalDateTime;
 
@@ -51,10 +53,13 @@ public class Client {
     @Builder.Default
     private Integer maxTokensPerUser = 5;  // 사용자당 최대 토큰 수
 
-    // 메타데이터
-    @Column(length = 255)
-    private String ownerEmail;  // 클라이언트 소유자
+    // 소유자 연관관계
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id", nullable = true)
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    private User owner;
 
+    // 메타데이터
     @Column(nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

@@ -17,4 +17,5 @@ public class ClientRegistrationRequest {
     private String frontendUrl;
     private List<String> redirectUris;
     private Integer maxTokensPerUser;
+    private Long ownerId;
 }

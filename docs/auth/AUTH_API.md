@@ -799,10 +799,13 @@ OAuth 클라이언트 애플리케이션을 관리합니다.
     "https://myapp.com/callback",
     "https://myapp.com/auth/callback"
   ],
-  "maxTokensPerUser": 5
+  "maxTokensPerUser": 5,
+  "ownerId": 1
 }
 ```
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | O | 클라이언트 이름 |
@@ -810,6 +813,7 @@ OAuth 클라이언트 애플리케이션을 관리합니다.
 | `frontendUrl` | string | O | 프론트엔드 URL |
 | `redirectUris` | string[] | O | 허용된 리다이렉트 URI 목록 (최소 1개) |
 | `maxTokensPerUser` | integer | X | 사용자당 최대 토큰 수 |
+| `ownerId` | integer | X | 소유자 사용자 ID |
 
 #### Success Response (201 Created)
 
@@ -829,7 +833,7 @@ OAuth 클라이언트 애플리케이션을 관리합니다.
     ],
     "enabled": true,
     "maxTokensPerUser": 5,
-    "ownerEmail": null,
+    "ownerId": 1,
     "createdAt": "2025-12-03T10:00:00",
     "updatedAt": "2025-12-03T10:00:00"
   }
@@ -871,7 +875,7 @@ GET /api/clients/client_a1b2c3d4e5f6
     ],
     "enabled": true,
     "maxTokensPerUser": 5,
-    "ownerEmail": null,
+    "ownerId": 1,
     "createdAt": "2025-12-03T10:00:00",
     "updatedAt": "2025-12-03T10:00:00"
   }
@@ -1058,7 +1062,7 @@ Authorization: Bearer {access_token}
 | **RefreshTokenRequest** | `refreshToken` |
 | **LogoutRequest** | `refreshToken`, `logoutAll` |
 | **PasswordResetRequest** | `email`, `token`, `newPassword`, `confirmPassword` |
-| **ClientRegistrationRequest** | `name`, `description`, `frontendUrl`, `redirectUris`, `maxTokensPerUser` |
+| **ClientRegistrationRequest** | `name`, `description`, `frontendUrl`, `redirectUris`, `maxTokensPerUser`, `ownerId` |
 
 ### Response DTOs
 
@@ -1066,7 +1070,7 @@ Authorization: Bearer {access_token}
 |-----|--------|
 | **AuthResponse** | `accessToken`, `refreshToken`, `tokenType`, `expiresIn`, `twoFactorRequired`, `message`, `deprecationWarning` |
 | **OAuthTokenResponse** | `access_token`, `refresh_token`, `token_type`, `expires_in`, `scope` |
-| **ClientResponse** | `id`, `clientId`, `clientSecret`, `name`, `description`, `frontendUrl`, `redirectUris`, `enabled`, `maxTokensPerUser`, `ownerEmail`, `createdAt`, `updatedAt` |
+| **ClientResponse** | `id`, `clientId`, `clientSecret`, `name`, `description`, `frontendUrl`, `redirectUris`, `enabled`, `maxTokensPerUser`, `ownerId`, `createdAt`, `updatedAt` |
 | **SessionListResponse** | `totalSessions`, `sessions` |
 | **UserSessionDTO** | `sessionId`, `deviceType`, `deviceName`, `ipAddress`, `location`, `lastActiveAt`, `createdAt`, `expiresAt`, `isCurrent` |
 

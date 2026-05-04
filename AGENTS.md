@@ -66,7 +66,8 @@ src/main/resources/
 │   ├── V2__create_clients_table.sql
 │   ├── V3__create_authorization_codes_table.sql
 │   ├── V4__add_pkce_to_authorization_codes.sql
-│   └── V5__encrypt_client_secrets.sql
+│   ├── V5__encrypt_client_secrets.sql
+│   └── V6__change_client_owner_to_fk.sql
 └── templates/oauth/                       # Thymeleaf 템플릿 (login, register, error, verify-email)
 
 src/test/
@@ -282,7 +283,7 @@ public class AuthServiceImpl implements AuthService { ... }
 | 테이블 | 목적 |
 |--------|------|
 | `users` | 사용자 정보, 2FA, 비밀번호 재설정, 이메일 검증 |
-| `clients` | OAuth 클라이언트 정보 (client_id, client_secret, redirect_uri) |
+| `clients` | OAuth 클라이언트 정보 (client_id, client_secret, redirect_uri, owner_id FK → users) |
 | `authorization_codes` | OAuth Authorization Code 저장 (PKCE 포함) |
 | `user_sessions` | 사용자 세션 정보 (Refresh Token 해시, 기기 정보, IP, 위치) |
 | `login_history` | 로그인 이력 |

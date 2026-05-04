@@ -3,7 +3,9 @@ package kr.hyfata.rest.api.auth.service.impl;
 import kr.hyfata.rest.api.auth.dto.ClientRegistrationRequest;
 import kr.hyfata.rest.api.auth.dto.ClientResponse;
 import kr.hyfata.rest.api.auth.entity.Client;
+import kr.hyfata.rest.api.auth.entity.User;
 import kr.hyfata.rest.api.auth.repository.ClientRepository;
+import kr.hyfata.rest.api.auth.repository.UserRepository;
 import kr.hyfata.rest.api.auth.service.ClientService;
 import kr.hyfata.rest.api.common.util.TokenGenerator;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ import java.util.Optional;
 public class ClientServiceImpl implements ClientService {
 
     private final ClientRepository clientRepository;
+    private final UserRepository userRepository;
     private final TokenGenerator tokenGenerator;
     private final PasswordEncoder passwordEncoder;
 
@@ -43,6 +46,13 @@ public class ClientServiceImpl implements ClientService {
                 .enabled(true)
                 .maxTokensPerUser(request.getMaxTokensPerUser() != null ? request.getMaxTokensPerUser() : 5)
                 .build();
+
+        // 소유자 설정 (optional)
+        if (request.getOwnerId() != null) {
+            User owner = userRepository.findById(request.getOwnerId())
+                    .orElseThrow(() -> new IllegalArgumentException("Owner user not found with id: " + request.getOwnerId()));
+            client.setOwner(owner);
+        }
 
         Client savedClient = clientRepository.save(client);
         log.info("Client registered: {} ({})", request.getName(), clientId);
@@ -106,7 +116,7 @@ public class ClientServiceImpl implements ClientService {
                 .redirectUris(redirectUris)
                 .enabled(client.getEnabled())
                 .maxTokensPerUser(client.getMaxTokensPerUser())
-                .ownerEmail(client.getOwnerEmail())
+                .ownerId(client.getOwner() != null ? client.getOwner().getId() : null)
                 .createdAt(client.getCreatedAt())
                 .updatedAt(client.getUpdatedAt())
                 .build();
@@ -128,7 +138,7 @@ public class ClientServiceImpl implements ClientService {
                 .redirectUris(redirectUris)
                 .enabled(client.getEnabled())
                 .maxTokensPerUser(client.getMaxTokensPerUser())
-                .ownerEmail(client.getOwnerEmail())
+                .ownerId(client.getOwner() != null ? client.getOwner().getId() : null)
                 .createdAt(client.getCreatedAt())
                 .updatedAt(client.getUpdatedAt())
                 .build();

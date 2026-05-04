@@ -22,7 +22,7 @@ public class ClientResponse {
     private List<String> redirectUris;
     private Boolean enabled;
     private Integer maxTokensPerUser;
-    private String ownerEmail;
+    private Long ownerId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
