@@ -1,0 +1,2 @@
+-- 사용자 역할 구분을 위한 role 컬럼 추가
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) NOT NULL DEFAULT 'ROLE_USER';

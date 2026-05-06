@@ -88,6 +88,10 @@ public class User implements UserDetails {
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
 
+    @Column(nullable = false, length = 50)
+    @Builder.Default
+    private String role = "ROLE_USER";  // ROLE_USER, ROLE_ADMIN
+
     // 비활성화 관련
     private LocalDateTime deactivatedAt;
 
@@ -113,7 +117,7 @@ public class User implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        return List.of(new SimpleGrantedAuthority(role));
     }
 
     /**
