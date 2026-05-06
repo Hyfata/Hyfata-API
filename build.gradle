@@ -50,6 +50,7 @@ dependencies {
 
     // WebSocket
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
 
     // 이미지 처리 (썸네일)
     implementation 'net.coobird:thumbnailator:0.4.20'

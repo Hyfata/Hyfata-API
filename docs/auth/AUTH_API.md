@@ -107,9 +107,10 @@ PKCE를 사용하지 않는 기본 OAuth 2.0 흐름입니다.
 | `redirect_uri` | O | 콜백 URL (등록된 URI여야 함) |
 | `response_type` | O | `code` 고정 |
 | `state` | X | CSRF 방지용 (없으면 자동 생성) |
+| `scope` | X | 요청 scope (공백 또는 `+`로 구분). 미입력 시 클라이언트의 `defaultScopes` 사용 |
 
 ```http
-GET /oauth/authorize?client_id=client_001&redirect_uri=https://myapp.com/callback&response_type=code&state=xyz123
+GET /oauth/authorize?client_id=client_001&redirect_uri=https://myapp.com/callback&response_type=code&state=xyz123&scope=profile+email
 ```
 
 #### Step 2~4: 사용자 로그인 및 Authorization Code 발급
@@ -319,6 +320,7 @@ Authorization 요청을 시작합니다. 로그인 페이지로 이동합니다.
 | `redirect_uri` | string | O | 콜백 URL (등록된 URI여야 함) |
 | `response_type` | string | O | 반드시 `code` |
 | `state` | string | X | CSRF 방지용 (없으면 자동 생성) |
+| `scope` | string | X | 요청 scope (공백 또는 `+`로 구분). 미입력 시 `defaultScopes` 사용 |
 | `code_challenge` | string | X | PKCE용 code challenge (S256 해싱됨) |
 | `code_challenge_method` | string | X | PKCE 메서드 (기본값: `S256`) |
 
@@ -354,6 +356,7 @@ GET /oauth/authorize?client_id=client_001&redirect_uri=https://myapp.com/callbac
 | `client_id` | string | O | 클라이언트 ID |
 | `redirect_uri` | string | O | 리다이렉트 URI |
 | `state` | string | O | CSRF 토큰 |
+| `scope` | string | X | 승인 scope (로그인 폼에서 전달) |
 | `code_challenge` | string | X | PKCE challenge |
 | `code_challenge_method` | string | X | PKCE 메서드 |
 
@@ -437,7 +440,7 @@ grant_type=refresh_token&refresh_token=eyJhbGciOiJIUzUxMiJ9...&client_id=client_
   "refresh_token": "eyJhbGciOiJIUzUxMiJ9...",
   "token_type": "Bearer",
   "expires_in": 86400000,
-  "scope": "user:email user:profile"
+  "scope": "profile email"
 }
 ```
 
@@ -453,6 +456,7 @@ grant_type=refresh_token&refresh_token=eyJhbGciOiJIUzUxMiJ9...&client_id=client_
 | HTTP Status | Error | Description |
 |-------------|-------|-------------|
 | 400 | `invalid_grant` | 잘못된 코드/토큰 |
+| 400 | `invalid_scope` | 요청 scope가 클라이언트의 `allowedScopes`를 초과 |
 | 400 | `invalid_request` | 잘못된 요청 파라미터 |
 | 500 | `server_error` | 서버 오류 |
 
@@ -800,12 +804,12 @@ OAuth 클라이언트 애플리케이션을 관리합니다.
     "https://myapp.com/auth/callback"
   ],
   "maxTokensPerUser": 5,
+  "defaultScopes": "profile email",
+  "allowedScopes": "profile email profile:write account:password account:manage 2fa:manage sessions:manage",
   "ownerId": 1
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | O | 클라이언트 이름 |
@@ -813,6 +817,8 @@ OAuth 클라이언트 애플리케이션을 관리합니다.
 | `frontendUrl` | string | O | 프론트엔드 URL |
 | `redirectUris` | string[] | O | 허용된 리다이렉트 URI 목록 (최소 1개) |
 | `maxTokensPerUser` | integer | X | 사용자당 최대 토큰 수 |
+| `defaultScopes` | string | X | 클라이언트 기본 scope (공백 구분). 미입력 시 `profile email` |
+| `allowedScopes` | string | X | 클라이언트가 요청할 수 있는 최대 scope (공백 구분). 미입력 시 `defaultScopes`와 동일 |
 | `ownerId` | integer | X | 소유자 사용자 ID |
 
 #### Success Response (201 Created)
@@ -833,6 +839,8 @@ OAuth 클라이언트 애플리케이션을 관리합니다.
     ],
     "enabled": true,
     "maxTokensPerUser": 5,
+    "defaultScopes": "profile email",
+    "allowedScopes": "profile email profile:write account:password account:manage 2fa:manage sessions:manage",
     "ownerId": 1,
     "createdAt": "2025-12-03T10:00:00",
     "updatedAt": "2025-12-03T10:00:00"
@@ -875,6 +883,8 @@ GET /api/clients/client_a1b2c3d4e5f6
     ],
     "enabled": true,
     "maxTokensPerUser": 5,
+    "defaultScopes": "profile email",
+    "allowedScopes": "profile email profile:write account:password account:manage 2fa:manage sessions:manage",
     "ownerId": 1,
     "createdAt": "2025-12-03T10:00:00",
     "updatedAt": "2025-12-03T10:00:00"

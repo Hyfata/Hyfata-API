@@ -11,10 +11,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Function;
 
 @Component
@@ -42,9 +39,16 @@ public class JwtUtil {
     public record TokenResult(String token, String jti) {}
 
     /**
-     * Access Token 생성 (JTI 포함)
+     * Access Token 생성 (JTI 포함, 기본)
      */
     public TokenResult generateAccessTokenWithJti(UserDetails userDetails) {
+        return generateAccessTokenWithJti(userDetails, null, null);
+    }
+
+    /**
+     * Access Token 생성 (JTI + client_id + scope 포함)
+     */
+    public TokenResult generateAccessTokenWithJti(UserDetails userDetails, String clientId, Set<String> scopes) {
         Map<String, Object> claims = new HashMap<>();
 
         String email = (userDetails instanceof User)
@@ -54,6 +58,14 @@ public class JwtUtil {
         String jti = UUID.randomUUID().toString().replace("-", "");
         claims.put("email", email);
         claims.put("jti", jti);
+
+        if (clientId != null && !clientId.isEmpty()) {
+            claims.put("client_id", clientId);
+        }
+
+        if (scopes != null && !scopes.isEmpty()) {
+            claims.put("scope", String.join(" ", scopes));
+        }
 
         String token = createToken(claims, email, jwtExpiration);
         return new TokenResult(token, jti);
@@ -112,6 +124,36 @@ public class JwtUtil {
         } catch (Exception e) {
             log.error("Error extracting JTI: {}", e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * 토큰에서 client_id 추출
+     */
+    public String extractClientId(String token) {
+        try {
+            Claims claims = extractAllClaims(token);
+            return claims.get("client_id", String.class);
+        } catch (Exception e) {
+            log.error("Error extracting client_id: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 토큰에서 scope 추출
+     */
+    public Set<String> extractScopes(String token) {
+        try {
+            Claims claims = extractAllClaims(token);
+            String scopeStr = claims.get("scope", String.class);
+            if (scopeStr == null || scopeStr.isEmpty()) {
+                return Set.of();
+            }
+            return new HashSet<>(Arrays.asList(scopeStr.split(" ")));
+        } catch (Exception e) {
+            log.error("Error extracting scopes: {}", e.getMessage());
+            return Set.of();
         }
     }
 

@@ -36,6 +36,14 @@ public class ClientServiceImpl implements ClientService {
         // redirectUris를 쉼표로 구분된 문자열로 변환
         String redirectUrisStr = String.join(",", request.getRedirectUris());
 
+        // scope 기본값 설정
+        String defaultScopes = (request.getDefaultScopes() != null && !request.getDefaultScopes().isBlank())
+                ? request.getDefaultScopes()
+                : "profile email";
+        String allowedScopes = (request.getAllowedScopes() != null && !request.getAllowedScopes().isBlank())
+                ? request.getAllowedScopes()
+                : defaultScopes;
+
         Client client = Client.builder()
                 .clientId(clientId)
                 .clientSecret(hashedClientSecret)  // 해싱된 값 저장
@@ -45,6 +53,8 @@ public class ClientServiceImpl implements ClientService {
                 .redirectUris(redirectUrisStr)
                 .enabled(true)
                 .maxTokensPerUser(request.getMaxTokensPerUser() != null ? request.getMaxTokensPerUser() : 5)
+                .defaultScopes(defaultScopes)
+                .allowedScopes(allowedScopes)
                 .build();
 
         // 소유자 설정 (optional)
@@ -116,6 +126,8 @@ public class ClientServiceImpl implements ClientService {
                 .redirectUris(redirectUris)
                 .enabled(client.getEnabled())
                 .maxTokensPerUser(client.getMaxTokensPerUser())
+                .defaultScopes(client.getDefaultScopes())
+                .allowedScopes(client.getAllowedScopes())
                 .ownerId(client.getOwner() != null ? client.getOwner().getId() : null)
                 .createdAt(client.getCreatedAt())
                 .updatedAt(client.getUpdatedAt())
@@ -138,6 +150,8 @@ public class ClientServiceImpl implements ClientService {
                 .redirectUris(redirectUris)
                 .enabled(client.getEnabled())
                 .maxTokensPerUser(client.getMaxTokensPerUser())
+                .defaultScopes(client.getDefaultScopes())
+                .allowedScopes(client.getAllowedScopes())
                 .ownerId(client.getOwner() != null ? client.getOwner().getId() : null)
                 .createdAt(client.getCreatedAt())
                 .updatedAt(client.getUpdatedAt())

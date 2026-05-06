@@ -10,6 +10,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -90,5 +91,40 @@ class JwtUtilTest {
                 .build();
 
         assertFalse(jwtUtil.validateToken(token, differentUser));
+    }
+
+    @Test
+    void testGenerateAccessTokenWithClientIdAndScopes() {
+        Set<String> scopes = Set.of("profile", "email", "account:manage");
+        JwtUtil.TokenResult result = jwtUtil.generateAccessTokenWithJti(testUser, "client_001", scopes);
+
+        assertNotNull(result);
+        assertNotNull(result.token());
+        assertNotNull(result.jti());
+
+        String clientId = jwtUtil.extractClientId(result.token());
+        Set<String> extractedScopes = jwtUtil.extractScopes(result.token());
+
+        assertEquals("client_001", clientId);
+        assertTrue(extractedScopes.contains("profile"));
+        assertTrue(extractedScopes.contains("email"));
+        assertTrue(extractedScopes.contains("account:manage"));
+    }
+
+    @Test
+    void testExtractScopes_EmptyToken() {
+        String token = jwtUtil.generateAccessToken(testUser);
+        Set<String> scopes = jwtUtil.extractScopes(token);
+
+        assertNotNull(scopes);
+        assertTrue(scopes.isEmpty());
+    }
+
+    @Test
+    void testExtractClientId_EmptyToken() {
+        String token = jwtUtil.generateAccessToken(testUser);
+        String clientId = jwtUtil.extractClientId(token);
+
+        assertNull(clientId);
     }
 }

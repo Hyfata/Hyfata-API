@@ -3,6 +3,7 @@ package kr.hyfata.rest.api.auth.controller;
 import kr.hyfata.rest.api.auth.dto.SessionListResponse;
 import kr.hyfata.rest.api.auth.dto.UserSessionDTO;
 import kr.hyfata.rest.api.auth.service.SessionService;
+import kr.hyfata.rest.api.common.security.scope.RequireScope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +30,7 @@ public class SessionController {
      * GET /api/sessions
      */
     @GetMapping
+    @RequireScope("sessions:manage")
     public ResponseEntity<SessionListResponse> getActiveSessions(
             Authentication authentication,
             @RequestHeader(value = "X-Refresh-Token", required = false) String refreshToken
@@ -44,6 +46,7 @@ public class SessionController {
      * DELETE /api/sessions/{sessionId}
      */
     @DeleteMapping("/{sessionId}")
+    @RequireScope("sessions:manage")
     public ResponseEntity<Map<String, String>> revokeSession(
             Authentication authentication,
             @PathVariable String sessionId,
@@ -64,6 +67,7 @@ public class SessionController {
      * POST /api/sessions/revoke-others
      */
     @PostMapping("/revoke-others")
+    @RequireScope("sessions:manage")
     public ResponseEntity<Map<String, String>> revokeOtherSessions(
             Authentication authentication,
             @RequestHeader(value = "X-Refresh-Token") String refreshToken
@@ -81,6 +85,7 @@ public class SessionController {
      * POST /api/sessions/revoke-all
      */
     @PostMapping("/revoke-all")
+    @RequireScope("sessions:manage")
     public ResponseEntity<Map<String, String>> revokeAllSessions(
             Authentication authentication
     ) {

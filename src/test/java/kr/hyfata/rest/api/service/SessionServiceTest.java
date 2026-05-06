@@ -24,6 +24,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -278,5 +279,65 @@ class SessionServiceTest {
         assertThat(hash1).isNotNull();
         assertThat(hash1).hasSize(64); // SHA-256 produces 64 hex characters
         assertThat(hash1).isEqualTo(hash2); // Same input produces same hash
+    }
+
+    @Test
+    @DisplayName("세션 생성 - scope 포함")
+    void createSession_withScopes_savesScopes() {
+        // given
+        String refreshToken = "test-refresh-token";
+        String accessTokenJti = "test-jti";
+        Set<String> scopes = Set.of("profile", "email", "account:manage");
+
+        when(ipUtil.getClientIp(mockRequest)).thenReturn("192.168.1.100");
+        when(ipUtil.normalizeIp("192.168.1.100")).thenReturn("192.168.1.100");
+        when(deviceDetector.parse(any())).thenReturn(
+                DeviceDetector.DeviceInfo.builder()
+                        .deviceType("Desktop")
+                        .deviceName("Chrome on Windows")
+                        .build()
+        );
+        when(geoIpService.resolveLocation("192.168.1.100")).thenReturn("Seoul, South Korea");
+        when(sessionRepository.countActiveSessionsByUser(any(), any())).thenReturn(0L);
+        when(sessionRepository.save(any(UserSession.class))).thenAnswer(i -> i.getArgument(0));
+
+        // when
+        UserSession result = sessionService.createSession(testUser, refreshToken, accessTokenJti,
+                mockRequest, false, scopes);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.getScopes().split(" ")).containsExactlyInAnyOrder("account:manage", "email", "profile");
+        assertThat(result.getPkceFlow()).isFalse();
+
+        verify(sessionRepository).save(any(UserSession.class));
+    }
+
+    @Test
+    @DisplayName("세션 생성 - scope가 null이면 scopes 필드가 null")
+    void createSession_withNullScopes_savesNullScopes() {
+        // given
+        String refreshToken = "test-refresh-token";
+        String accessTokenJti = "test-jti";
+
+        when(ipUtil.getClientIp(mockRequest)).thenReturn("192.168.1.100");
+        when(ipUtil.normalizeIp("192.168.1.100")).thenReturn("192.168.1.100");
+        when(deviceDetector.parse(any())).thenReturn(
+                DeviceDetector.DeviceInfo.builder()
+                        .deviceType("Desktop")
+                        .deviceName("Chrome on Windows")
+                        .build()
+        );
+        when(geoIpService.resolveLocation("192.168.1.100")).thenReturn("Seoul, South Korea");
+        when(sessionRepository.countActiveSessionsByUser(any(), any())).thenReturn(0L);
+        when(sessionRepository.save(any(UserSession.class))).thenAnswer(i -> i.getArgument(0));
+
+        // when
+        UserSession result = sessionService.createSession(testUser, refreshToken, accessTokenJti,
+                mockRequest, false, null);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.getScopes()).isNull();
     }
 }

@@ -24,6 +24,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -43,12 +45,24 @@ public class OAuthServiceImpl implements OAuthService {
 
     @Override
     public String generateAuthorizationCode(String clientId, String email, String redirectUri, String state) {
-        return generateAuthorizationCode(clientId, email, redirectUri, state, null, null);
+        return generateAuthorizationCode(clientId, email, redirectUri, state, null, null, null);
+    }
+
+    @Override
+    public String generateAuthorizationCode(String clientId, String email, String redirectUri, String state,
+                                           String scopes) {
+        return generateAuthorizationCode(clientId, email, redirectUri, state, null, null, scopes);
     }
 
     @Override
     public String generateAuthorizationCode(String clientId, String email, String redirectUri, String state,
                                            String codeChallenge, String codeChallengeMethod) {
+        return generateAuthorizationCode(clientId, email, redirectUri, state, codeChallenge, codeChallengeMethod, null);
+    }
+
+    @Override
+    public String generateAuthorizationCode(String clientId, String email, String redirectUri, String state,
+                                           String codeChallenge, String codeChallengeMethod, String scopes) {
         // 클라이언트 검증
         Client client = clientRepository.findByClientId(clientId)
                 .orElseThrow(() -> new BadCredentialsException("유효하지 않은 클라이언트입니다."));
@@ -75,6 +89,7 @@ public class OAuthServiceImpl implements OAuthService {
                 .email(email)
                 .redirectUri(redirectUri)
                 .state(state)
+                .scopes(scopes)
                 .used(false)
                 .expiresAt(LocalDateTime.now().plusMinutes(10));  // 10분 유효
 
@@ -165,8 +180,11 @@ public class OAuthServiceImpl implements OAuthService {
         authCode.setUsed(true);
         authorizationCodeRepository.save(authCode);
 
-        // 9. 토큰 생성
-        String accessToken = jwtUtil.generateAccessToken(user);
+        // 9. 토큰 생성 (scope 포함)
+        Set<String> scopes = parseScopes(authCode.getScopes());
+        JwtUtil.TokenResult accessTokenResult = jwtUtil.generateAccessTokenWithJti(user, clientId, scopes);
+        String accessToken = accessTokenResult.token();
+        String jti = accessTokenResult.jti();
         String refreshToken = jwtUtil.generateRefreshToken(user);
         long expiresIn = 86400000;  // 24시간
 
@@ -181,7 +199,7 @@ public class OAuthServiceImpl implements OAuthService {
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(expiresIn)
-                .scope("user:email user:profile")
+                .scope(String.join(" ", scopes))
                 .build();
     }
 
@@ -296,15 +314,16 @@ public class OAuthServiceImpl implements OAuthService {
         authCode.setUsed(true);
         authorizationCodeRepository.save(authCode);
 
-        // 9. 토큰 생성 (JTI 포함)
-        JwtUtil.TokenResult accessTokenResult = jwtUtil.generateAccessTokenWithJti(user);
+        // 9. 토큰 생성 (JTI + client_id + scope 포함)
+        Set<String> scopes = parseScopes(authCode.getScopes());
+        JwtUtil.TokenResult accessTokenResult = jwtUtil.generateAccessTokenWithJti(user, clientId, scopes);
         String accessToken = accessTokenResult.token();
         String jti = accessTokenResult.jti();
         String refreshToken = jwtUtil.generateRefreshToken(user);
         long expiresIn = 86400000;  // 24시간
 
-        // 10. 세션 생성 (PKCE 여부 저장)
-        sessionService.createSession(user, refreshToken, jti, request, isPkceFlow);
+        // 10. 세션 생성 (PKCE 여부 및 scope 저장)
+        sessionService.createSession(user, refreshToken, jti, request, isPkceFlow, scopes);
 
         if (isPkceFlow) {
             log.info("Authorization code exchanged for tokens with PKCE (Public Client): clientId={}, email={}", clientId, authCode.getEmail());
@@ -317,7 +336,7 @@ public class OAuthServiceImpl implements OAuthService {
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(expiresIn)
-                .scope("user:email user:profile")
+                .scope(String.join(" ", scopes))
                 .build();
     }
 
@@ -370,18 +389,21 @@ public class OAuthServiceImpl implements OAuthService {
             tokenBlacklistService.blacklistJti(oldSession.getAccessTokenJti(), 900);
         }
 
-        // 7. 새 토큰 생성 (토큰 로테이션)
-        JwtUtil.TokenResult newAccessTokenResult = jwtUtil.generateAccessTokenWithJti(user);
+        // 7. 기존 세션의 scope 유지
+        Set<String> scopes = parseScopes(oldSession.getScopes());
+
+        // 8. 새 토큰 생성 (토큰 로테이션, 기존 scope 유지)
+        JwtUtil.TokenResult newAccessTokenResult = jwtUtil.generateAccessTokenWithJti(user, clientId, scopes);
         String newAccessToken = newAccessTokenResult.token();
         String newJti = newAccessTokenResult.jti();
         String newRefreshToken = jwtUtil.generateRefreshToken(user);
         long expiresIn = 86400000;  // 24시간
 
-        // 8. 기존 세션 무효화 (refresh token 해시로 찾아서)
+        // 9. 기존 세션 무효화 (refresh token 해시로 찾아서)
         sessionService.revokeSession(email, oldSessionHash, null);
 
-        // 9. 새 세션 생성 (PKCE 여부 유지)
-        sessionService.createSession(user, newRefreshToken, newJti, request, isPkceFlow);
+        // 10. 새 세션 생성 (PKCE 여부 및 scope 유지)
+        sessionService.createSession(user, newRefreshToken, newJti, request, isPkceFlow, scopes);
 
         if (isPkceFlow) {
             log.info("OAuth token refreshed (Public Client/PKCE): email={}, clientId={}", email, clientId);
@@ -394,7 +416,7 @@ public class OAuthServiceImpl implements OAuthService {
                 .refreshToken(newRefreshToken)
                 .tokenType("Bearer")
                 .expiresIn(expiresIn)
-                .scope("user:email user:profile")
+                .scope(String.join(" ", scopes))
                 .build();
     }
 
@@ -415,5 +437,15 @@ public class OAuthServiceImpl implements OAuthService {
         sessionService.revokeSession(email, sessionHash, null);
 
         log.info("OAuth logout successful: email={}", email);
+    }
+
+    /**
+     * scope 문자열을 Set으로 파싱 (null/empty 시 기본값)
+     */
+    private Set<String> parseScopes(String scopesStr) {
+        if (scopesStr == null || scopesStr.isBlank()) {
+            return new HashSet<>(Arrays.asList("profile", "email"));
+        }
+        return new HashSet<>(Arrays.asList(scopesStr.split(" ")));
     }
 }

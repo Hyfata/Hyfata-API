@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -61,6 +62,13 @@ public class SessionServiceImpl implements SessionService {
     @Transactional
     public UserSession createSession(User user, String refreshToken, String accessTokenJti,
                                       HttpServletRequest request, boolean isPkceFlow) {
+        return createSession(user, refreshToken, accessTokenJti, request, isPkceFlow, null);
+    }
+
+    @Override
+    @Transactional
+    public UserSession createSession(User user, String refreshToken, String accessTokenJti,
+                                      HttpServletRequest request, boolean isPkceFlow, Set<String> scopes) {
         // 동시 세션 수 확인 및 제한
         enforceSessionLimit(user);
 
@@ -72,6 +80,8 @@ public class SessionServiceImpl implements SessionService {
 
         LocalDateTime expiresAt = LocalDateTime.now()
                 .plusSeconds(refreshTokenExpiration / 1000);
+
+        String scopesStr = (scopes != null && !scopes.isEmpty()) ? String.join(" ", scopes) : null;
 
         UserSession session = UserSession.builder()
                 .refreshTokenHash(tokenHash)
@@ -85,6 +95,7 @@ public class SessionServiceImpl implements SessionService {
                 .expiresAt(expiresAt)
                 .isRevoked(false)
                 .pkceFlow(isPkceFlow)  // PKCE 기반 Public Client 여부
+                .scopes(scopesStr)
                 .lastActiveAt(LocalDateTime.now())
                 .createdAt(LocalDateTime.now())
                 .build();

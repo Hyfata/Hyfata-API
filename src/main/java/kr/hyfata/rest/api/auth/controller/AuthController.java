@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import kr.hyfata.rest.api.auth.dto.*;
 import kr.hyfata.rest.api.auth.service.AuthService;
+import kr.hyfata.rest.api.common.security.scope.RequireScope;
 import kr.hyfata.rest.api.common.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -232,6 +233,7 @@ public class AuthController {
      * POST /api/auth/enable-2fa
      */
     @PostMapping("/enable-2fa")
+    @RequireScope("2fa:manage")
     public ResponseEntity<Map<String, String>> enableTwoFactor(Authentication authentication) {
         try {
             String email = authentication.getName();
@@ -252,6 +254,7 @@ public class AuthController {
      * POST /api/auth/disable-2fa
      */
     @PostMapping("/disable-2fa")
+    @RequireScope("2fa:manage")
     public ResponseEntity<Map<String, String>> disableTwoFactor(Authentication authentication) {
         try {
             String email = authentication.getName();

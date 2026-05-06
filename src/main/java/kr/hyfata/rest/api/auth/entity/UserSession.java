@@ -59,6 +59,9 @@ public class UserSession {
     @Builder.Default
     private Boolean pkceFlow = false;  // PKCE 기반 Public Client 여부
 
+    @Column(length = 500)
+    private String scopes;  // 세션에 발급된 scope 목록
+
     @Column(name = "last_active_at", nullable = false)
     @Builder.Default
     private LocalDateTime lastActiveAt = LocalDateTime.now();

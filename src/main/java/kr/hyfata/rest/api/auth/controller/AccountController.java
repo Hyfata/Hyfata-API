@@ -2,6 +2,7 @@ package kr.hyfata.rest.api.auth.controller;
 
 import kr.hyfata.rest.api.auth.dto.account.*;
 import kr.hyfata.rest.api.auth.service.AccountService;
+import kr.hyfata.rest.api.common.security.scope.RequireScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -21,6 +22,7 @@ public class AccountController {
      * PUT /api/account/password - 비밀번호 변경
      */
     @PutMapping("/password")
+    @RequireScope("account:password")
     public ResponseEntity<?> changePassword(
             Authentication authentication,
             @RequestBody ChangePasswordRequest request) {
@@ -37,6 +39,7 @@ public class AccountController {
      * POST /api/account/deactivate - 계정 비활성화
      */
     @PostMapping("/deactivate")
+    @RequireScope("account:manage")
     public ResponseEntity<?> deactivateAccount(
             Authentication authentication,
             @RequestBody DeactivateAccountRequest request) {
@@ -53,6 +56,7 @@ public class AccountController {
      * DELETE /api/account - 계정 영구 삭제
      */
     @DeleteMapping
+    @RequireScope("account:manage")
     public ResponseEntity<?> deleteAccount(
             Authentication authentication,
             @RequestBody DeleteAccountRequest request) {

@@ -10,10 +10,22 @@ public interface OAuthService {
     String generateAuthorizationCode(String clientId, String email, String redirectUri, String state);
 
     /**
+     * Authorization Code 생성 (scope 포함)
+     */
+    String generateAuthorizationCode(String clientId, String email, String redirectUri, String state,
+                                     String scopes);
+
+    /**
      * Authorization Code 생성 (PKCE 포함)
      */
     String generateAuthorizationCode(String clientId, String email, String redirectUri, String state,
                                      String codeChallenge, String codeChallengeMethod);
+
+    /**
+     * Authorization Code 생성 (PKCE + scope 포함)
+     */
+    String generateAuthorizationCode(String clientId, String email, String redirectUri, String state,
+                                     String codeChallenge, String codeChallengeMethod, String scopes);
 
     /**
      * Authorization Code 검증 및 토큰 발급 (PKCE 없음)

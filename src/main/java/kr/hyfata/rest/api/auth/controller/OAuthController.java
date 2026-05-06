@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpSession;
 import kr.hyfata.rest.api.auth.dto.OAuthTokenResponse;
 import kr.hyfata.rest.api.auth.dto.PasswordResetRequest;
 import kr.hyfata.rest.api.auth.dto.RegisterRequest;
+import kr.hyfata.rest.api.auth.entity.Client;
 import kr.hyfata.rest.api.auth.entity.User;
 import kr.hyfata.rest.api.auth.repository.UserRepository;
 import kr.hyfata.rest.api.auth.service.AuthService;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -65,6 +67,7 @@ public class OAuthController {
             @RequestParam(defaultValue = "code") String response_type,
             @RequestParam(required = false) String code_challenge,
             @RequestParam(required = false) String code_challenge_method,
+            @RequestParam(required = false) String scope,
             Model model,
             HttpServletRequest request) {
 
@@ -75,6 +78,8 @@ public class OAuthController {
                 model.addAttribute("error", "유효하지 않은 클라이언트입니다.");
                 return "oauth/error";
             }
+
+            Client client = clientOpt.get();
 
             // Redirect URI 검증
             if (!oAuthService.validateRedirectUri(client_id, redirect_uri)) {
@@ -93,6 +98,18 @@ public class OAuthController {
                 state = UUID.randomUUID().toString();
             }
 
+            // Scope 처리: 미입력 시 클라이언트 기본 scope 사용
+            if (scope == null || scope.isEmpty()) {
+                scope = String.join(" ", client.getDefaultScopesSet());
+            }
+
+            // Scope 검증: 클라이언트의 allowedScopes 초과 여부 확인
+            String validatedScope = validateScopes(client, scope);
+            if (validatedScope == null) {
+                model.addAttribute("error", "invalid_scope: 요청된 scope가 클라이언트의 허용 범위를 초과합니다.");
+                return "oauth/error";
+            }
+
             // 이미 로그인된 사용자 확인 (서버사이드 세션 기반)
             User autoUser = getAuthenticatedUser();
             if (autoUser != null) {
@@ -108,9 +125,10 @@ public class OAuthController {
                 String authCode;
                 if (code_challenge != null && !code_challenge.isEmpty()) {
                     authCode = oAuthService.generateAuthorizationCode(client_id, autoUser.getEmail(), redirect_uri, state,
-                            code_challenge, code_challenge_method);
+                            code_challenge, code_challenge_method, validatedScope);
                 } else {
-                    authCode = oAuthService.generateAuthorizationCode(client_id, autoUser.getEmail(), redirect_uri, state);
+                    authCode = oAuthService.generateAuthorizationCode(client_id, autoUser.getEmail(), redirect_uri, state,
+                            validatedScope);
                 }
 
                 String redirectUrl = redirect_uri + "?code=" + authCode + "&state=" + state;
@@ -120,9 +138,10 @@ public class OAuthController {
 
             // 로그인 페이지로 이동 (state와 클라이언트 정보 전달)
             model.addAttribute("client_id", client_id);
-            model.addAttribute("client_name", clientOpt.get().getName());
+            model.addAttribute("client_name", client.getName());
             model.addAttribute("redirect_uri", redirect_uri);
             model.addAttribute("state", state);
+            model.addAttribute("scope", validatedScope);
 
             // PKCE 파라미터 전달
             if (code_challenge != null && !code_challenge.isEmpty()) {
@@ -157,6 +176,7 @@ public class OAuthController {
             @RequestParam String state,
             @RequestParam(required = false) String code_challenge,
             @RequestParam(required = false) String code_challenge_method,
+            @RequestParam(required = false) String scope,
             Model model,
             HttpServletRequest request,
             HttpServletResponse response) {
@@ -194,14 +214,14 @@ public class OAuthController {
                 throw new Exception("이메일 인증이 필요합니다.");
             }
 
-            // 6. Authorization Code 생성 (PKCE 파라미터 포함)
+            // 6. Authorization Code 생성 (PKCE 파라미터 및 scope 포함)
             String authCode;
             if (code_challenge != null && !code_challenge.isEmpty()) {
                 authCode = oAuthService.generateAuthorizationCode(client_id, email, redirect_uri, state,
-                        code_challenge, code_challenge_method);
+                        code_challenge, code_challenge_method, scope);
                 log.info("Authorization code generated with PKCE: email={}, client_id={}", email, client_id);
             } else {
-                authCode = oAuthService.generateAuthorizationCode(client_id, email, redirect_uri, state);
+                authCode = oAuthService.generateAuthorizationCode(client_id, email, redirect_uri, state, scope);
                 log.info("Authorization code generated: email={}, client_id={}", email, client_id);
             }
 
@@ -220,6 +240,7 @@ public class OAuthController {
                     .map(c -> c.getName()).orElse(client_id));
             model.addAttribute("redirect_uri", redirect_uri);
             model.addAttribute("state", state);
+            model.addAttribute("scope", scope);
             model.addAttribute("code_challenge", code_challenge);
             model.addAttribute("code_challenge_method", code_challenge_method);
             return "oauth/login";
@@ -232,6 +253,7 @@ public class OAuthController {
                     .map(c -> c.getName()).orElse(client_id));
             model.addAttribute("redirect_uri", redirect_uri);
             model.addAttribute("state", state);
+            model.addAttribute("scope", scope);
             model.addAttribute("code_challenge", code_challenge);
             model.addAttribute("code_challenge_method", code_challenge_method);
             return "oauth/login";
@@ -590,6 +612,31 @@ public class OAuthController {
      * Spring Security Context에서 인증된 사용자를 조회합니다.
      * 서버사이드 세션(Redis) 기반입니다.
      */
+    /**
+     * 클라이언트의 allowedScopes 대비 요청 scope 검증
+     * @return 유효하면 정규화된 scope 문자열, 무효하면 null
+     */
+    private String validateScopes(Client client, String requestedScope) {
+        if (requestedScope == null || requestedScope.isBlank()) {
+            return String.join(" ", client.getDefaultScopesSet());
+        }
+
+        Set<String> allowed = client.getAllowedScopesSet();
+        Set<String> requested = Set.of(requestedScope.split("[ +]"));
+
+        // 요청된 모든 scope가 allowed에 포함되는지 확인
+        for (String req : requested) {
+            if (req.isBlank()) continue;
+            if (!allowed.contains(req)) {
+                log.warn("Scope validation failed: client_id={}, requested='{}', allowed='{}'",
+                        client.getClientId(), req, String.join(" ", allowed));
+                return null;
+            }
+        }
+
+        return String.join(" ", requested);
+    }
+
     private User getAuthenticatedUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated()

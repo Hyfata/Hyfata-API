@@ -18,4 +18,6 @@ public class ClientRegistrationRequest {
     private List<String> redirectUris;
     private Integer maxTokensPerUser;
     private Long ownerId;
+    private String defaultScopes;   // 예: "profile email"
+    private String allowedScopes;   // 예: "profile email profile:write account:password"
 }

@@ -45,6 +45,9 @@ public class AuthorizationCode {
     @Column(length = 50)
     private String codeChallengeMethod;  // PKCE method (S256 or plain)
 
+    @Column(length = 500)
+    private String scopes;  // 사용자가 승인한 scope 목록
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean used = false;  // 한 번만 사용 가능

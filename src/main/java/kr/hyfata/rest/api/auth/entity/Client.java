@@ -53,6 +53,12 @@ public class Client {
     @Builder.Default
     private Integer maxTokensPerUser = 5;  // 사용자당 최대 토큰 수
 
+    @Column(length = 500)
+    private String defaultScopes;   // 클라이언트 기본 scope (등록 시 설정)
+
+    @Column(length = 500)
+    private String allowedScopes;   // 클라이언트가 요청할 수 있는 최대 scope
+
     // 소유자 연관관계
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = true)
@@ -71,5 +77,23 @@ public class Client {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * 허용된 scope 목록 반환
+     */
+    public java.util.Set<String> getAllowedScopesSet() {
+        return allowedScopes != null
+                ? java.util.Set.of(allowedScopes.split(" "))
+                : java.util.Set.of("profile", "email");
+    }
+
+    /**
+     * 기본 scope 목록 반환
+     */
+    public java.util.Set<String> getDefaultScopesSet() {
+        return defaultScopes != null
+                ? java.util.Set.of(defaultScopes.split(" "))
+                : java.util.Set.of("profile", "email");
     }
 }
