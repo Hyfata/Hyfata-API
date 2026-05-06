@@ -61,20 +61,7 @@
 | `2fa:manage` | 2FA 활성화/비활성화 | ❌ | ✅ |
 | `sessions:manage` | 세션 목록 조회 및 원격 로그아웃 | ❌ | ✅ |
 
-### 3.3 Agora 소셜 기능 Scope (Agora 모듈 완성 후 적용)
-
-| Scope | 설명 |
-|-------|------|
-| `friends:read` | 친구 목록 조회 |
-| `friends:manage` | 친구 요청/수락/차단 |
-| `chat:read` | 채팅 메시지 읽기 |
-| `chat:write` | 채팅 메시지 전송 |
-| `team:read` | 팀 정보 조회 |
-| `team:manage` | 팀 생성/초대/탈퇴 |
-| `notifications:read` | 알림 조회 |
-| `files:upload` | 파일 업로드 |
-
-### 3.4 Scope 상속 및 포함 관계
+### 3.3 Scope 상속 및 포함 관계
 
 ```
 profile        → profile:read (implicit)

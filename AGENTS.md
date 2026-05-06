@@ -11,7 +11,7 @@
 - **OAuth 2.0 Authorization Code Flow + PKCE** (RFC 7636) 구현
 - **JWT 기반 인증** (Access Token 24시간, Refresh Token 7일)
 - **세션 관리** (사용자당 최대 5개 동시 세션, Redis 기반 JTI 블랙리스트)
-- **Agora 플랫폼** — 1:1/그룹 채팅(WebSocket STOMP), 친구 관리, 팀(그룹) 기능, 알림, 파일 업로드 등의 소셜 기능
+
 
 ### 기술 스택
 
@@ -44,17 +44,10 @@ src/main/java/kr/hyfata/rest/api/
 │   ├── scheduler/                         # OAuthCleanupScheduler (만료 코드 자동 정리)
 │   └── service/                           # 서비스 인터페이스 및 구현체
 │       └── impl/
-├── agora/                                 # 소셜 플랫폼 모듈 (서비스/리포지토리 구현됨, 컨트롤러 미구현)
-│   ├── chat/                              # 1:1 채팅, 그룹 채팅, 채팅 폴�더
-│   ├── file/                              # 파일 업로드/메타데이터
-│   ├── friend/                            # 친구 요청, 차단, 관계 관리
-│   ├── notification/                      # 알림 및 FCM 토큰
-│   ├── profile/                           # 사용자 프로필 및 설정
-│   └── team/                              # 팀(그룹) 관리, 공지, 할일, 일정, 초대
 └── common/                                # 공통 모듈
-    ├── config/                            # Security, Redis, WebSocket, 파일 저장소 등 설정
+    ├── config/                            # Security, Redis, WebSocket 등 설정
     ├── exception/                         # GlobalExceptionHandler
-    ├── security/                          # JWT 인증 필터, WebSocket 채널 인터셉터
+    ├── security/                          # JWT 인증 필터
     ├── service/                           # EmailService
     └── util/                              # JwtUtil, PkceUtil, TokenGenerator, DeviceDetector, GeoIpService, IpUtil
 
@@ -77,17 +70,13 @@ src/test/
 └── resources/application-test.properties  # 테스트 프로필 설정 (H2 사용)
 
 docs/
-├── agora/                                 # Agora API 문서 (한국어)
-│   ├── api/                               # API 스펙, 플로우 문서, Flutter 연동 가이드
-│   └── ERD.md
-└── auth/                                  # 인증 관련 Flutter 연동 문서
+└── auth/                                  # 인증 관련 문서 및 Flutter 연동 가이드
 
 test/                                      # Postman 컬렉션 및 테스트 가이드
 ```
 
 ### 중요한 구조적 특징
 
-- **Agora 모듈의 컨트롤러 부재**: `agora` 패키지 아래에는 `entity`, `repository`, `service`, `dto`가 존재하지만, **컨트롤러 클래스가 아직 구현되지 않았습니다**. `docs/agora/api/`의 문서들은 구현될 컨트롤러를 가정하고 작성되어 있습니다.
 - **서비스 인터페이스 패턴**: 모든 서비스는 인터페이스(`*Service`)와 구현체(`*ServiceImpl`)로 분리되어 있습니다.
 - **빌더 패턴 사용**: JPA 엔티티는 Lombok `@Builder`를 적극적으로 사용합니다.
 
@@ -183,7 +172,7 @@ open build/reports/tests/test/index.html
 
 ### 테스트 커버리지 현황
 
-현재 테스트 파일은 7개로, 주요 유틸리티와 핵심 인증 서비스에 집중되어 있습니다. Agora 모듈의 테스트는 아직 작성되지 않았습니다.
+현재 테스트 파일은 7개로, 주요 유틸리티와 핵심 인증 서비스에 집중되어 있습니다.
 
 ---
 
@@ -287,13 +276,7 @@ public class AuthServiceImpl implements AuthService { ... }
 | `authorization_codes` | OAuth Authorization Code 저장 (PKCE 포함) |
 | `user_sessions` | 사용자 세션 정보 (Refresh Token 해시, 기기 정보, IP, 위치) |
 | `login_history` | 로그인 이력 |
-| `agora_user_profiles`, `user_settings` | Agora 프로필 및 설정 |
-| `friends`, `friend_requests`, `blocked_users` | 친구 관계 |
-| `chats`, `chat_participants`, `messages`, `message_read_status`, `chat_folders` | 채팅 |
-| `teams`, `team_members`, `team_invitations`, `team_profiles`, `team_roles` | 팀 |
-| `events`, `notices`, `todos` | 팀 부가 기능 |
-| `notifications` | 알림 |
-| `agora_files`, `file_metadata` | 파일 업로드 |
+
 
 ---
 
