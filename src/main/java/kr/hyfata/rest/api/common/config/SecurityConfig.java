@@ -50,7 +50,6 @@ public class SecurityConfig {
                         // 공개 엔드포인트
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
-                        .requestMatchers("/api/clients/register").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/agora/files/**").permitAll()  // 파일 조회만 공개
                         .requestMatchers("/oauth/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
