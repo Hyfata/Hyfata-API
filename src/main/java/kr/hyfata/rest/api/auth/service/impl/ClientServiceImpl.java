@@ -10,6 +10,8 @@ import kr.hyfata.rest.api.auth.service.ClientService;
 import kr.hyfata.rest.api.common.util.TokenGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -27,7 +29,11 @@ public class ClientServiceImpl implements ClientService {
     private final PasswordEncoder passwordEncoder;
 
     @Override
-    public ClientResponse registerClient(ClientRegistrationRequest request) {
+    public ClientResponse registerClient(ClientRegistrationRequest request, Authentication authentication) {
+        // 관리자 여부 확인
+        boolean isAdmin = authentication != null && authentication.getAuthorities()
+                .contains(new SimpleGrantedAuthority("ROLE_ADMIN"));
+
         // clientId와 clientSecret 생성
         String clientId = generateUniqueClientId();
         String clientSecret = tokenGenerator.generatePasswordResetToken();  // 긴 난수 토큰 사용
@@ -36,13 +42,24 @@ public class ClientServiceImpl implements ClientService {
         // redirectUris를 쉼표로 구분된 문자열로 변환
         String redirectUrisStr = String.join(",", request.getRedirectUris());
 
-        // scope 기본값 설정
-        String defaultScopes = (request.getDefaultScopes() != null && !request.getDefaultScopes().isBlank())
-                ? request.getDefaultScopes()
-                : "profile email";
-        String allowedScopes = (request.getAllowedScopes() != null && !request.getAllowedScopes().isBlank())
-                ? request.getAllowedScopes()
-                : defaultScopes;
+        // scope 설정: 비관리자는 profile email로 강제 제한
+        String defaultScopes;
+        String allowedScopes;
+        if (isAdmin) {
+            defaultScopes = (request.getDefaultScopes() != null && !request.getDefaultScopes().isBlank())
+                    ? request.getDefaultScopes()
+                    : "profile email";
+            allowedScopes = (request.getAllowedScopes() != null && !request.getAllowedScopes().isBlank())
+                    ? request.getAllowedScopes()
+                    : defaultScopes;
+        } else {
+            defaultScopes = "profile email";
+            allowedScopes = "profile email";
+            if (request.getDefaultScopes() != null || request.getAllowedScopes() != null) {
+                log.warn("Non-admin user attempted to set custom scopes. Forced to 'profile email'. user={}",
+                        authentication != null ? authentication.getName() : "anonymous");
+            }
+        }
 
         Client client = Client.builder()
                 .clientId(clientId)
@@ -65,7 +82,8 @@ public class ClientServiceImpl implements ClientService {
         }
 
         Client savedClient = clientRepository.save(client);
-        log.info("Client registered: {} ({})", request.getName(), clientId);
+        log.info("Client registered: {} ({}) by user={} (admin={})", request.getName(), clientId,
+                authentication != null ? authentication.getName() : "anonymous", isAdmin);
 
         // 생성 시에만 평문 clientSecret을 응답에 포함
         return mapToResponseWithSecret(savedClient, clientSecret);

@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -50,7 +51,8 @@ public class ClientController {
      */
     @PostMapping("/register")
     public ResponseEntity<Map<String, Object>> registerClient(
-            @RequestBody ClientRegistrationRequest request) {
+            @RequestBody ClientRegistrationRequest request,
+            Authentication authentication) {
         try {
             // 필수 필드 검증
             if (request.getName() == null || request.getName().trim().isEmpty()) {
@@ -63,7 +65,7 @@ public class ClientController {
                 throw new IllegalArgumentException("At least one redirect URI is required");
             }
 
-            ClientResponse clientResponse = clientService.registerClient(request);
+            ClientResponse clientResponse = clientService.registerClient(request, authentication);
 
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Client registered successfully");

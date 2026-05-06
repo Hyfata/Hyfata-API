@@ -790,7 +790,13 @@ OAuth 클라이언트 애플리케이션을 관리합니다.
 
 ### POST /api/clients/register
 
+**Authentication Required:** Bearer Token
+
 새 OAuth 클라이언트를 등록합니다.
+
+> **Scope 제한 정책:**
+> - 관리자(`ROLE_ADMIN`): `defaultScopes`/`allowedScopes`를 자유롭게 지정 가능
+> - 일반 사용자(`ROLE_USER`) 및 익명: `defaultScopes`와 `allowedScopes`가 무조건 `profile email`로 제한됨. 요청에 다른 값을 담아도 무시됩니다.
 
 #### Request Body
 
@@ -817,8 +823,8 @@ OAuth 클라이언트 애플리케이션을 관리합니다.
 | `frontendUrl` | string | O | 프론트엔드 URL |
 | `redirectUris` | string[] | O | 허용된 리다이렉트 URI 목록 (최소 1개) |
 | `maxTokensPerUser` | integer | X | 사용자당 최대 토큰 수 |
-| `defaultScopes` | string | X | 클라이언트 기본 scope (공백 구분). 미입력 시 `profile email` |
-| `allowedScopes` | string | X | 클라이언트가 요청할 수 있는 최대 scope (공백 구분). 미입력 시 `defaultScopes`와 동일 |
+| `defaultScopes` | string | X | 클라이언트 기본 scope (공백 구분). **관리자만 자유 지정 가능** |
+| `allowedScopes` | string | X | 클라이언트가 요청할 수 있는 최대 scope (공백 구분). **관리자만 자유 지정 가능** |
 | `ownerId` | integer | X | 소유자 사용자 ID |
 
 #### Success Response (201 Created)
