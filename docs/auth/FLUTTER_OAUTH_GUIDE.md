@@ -220,25 +220,33 @@ class OAuthService {
   }
 
   /// 1단계: 로그인 페이지로 리다이렉트
-  Future<void> startOAuthLogin() async {
+  /// [scope] — 요청할 OAuth scope (공백 구분). null이면 서버의 defaultScopes 사용
+  Future<void> startOAuthLogin({String? scope}) async {
     try {
       // PKCE 코드 생성
       _codeVerifier = PkceUtil.generateCodeVerifier();
       final codeChallenge = PkceUtil.generateCodeChallenge(_codeVerifier!);
 
       // 로그인 URL 구성
+      final queryParams = {
+        'client_id': _clientId,
+        'response_type': 'code',
+        'redirect_uri': _redirectUri,
+        'code_challenge': codeChallenge,
+        'code_challenge_method': 'S256',
+        'state': _generateState(),
+      };
+
+      // scope가 지정되면 추가 (공식 앱은 전체 scope, 타사 앱은 제한된 scope)
+      if (scope != null && scope.isNotEmpty) {
+        queryParams['scope'] = scope;
+      }
+
       final loginUrl = Uri(
         scheme: 'https',
         host: 'api.hyfata.com',
         path: '/oauth/authorize',
-        queryParameters: {
-          'client_id': _clientId,
-          'response_type': 'code',
-          'redirect_uri': _redirectUri,
-          'code_challenge': codeChallenge,
-          'code_challenge_method': 'S256',
-          'state': _generateState(),
-        },
+        queryParameters: queryParams,
       ).toString();
 
       // 브라우저에서 로그인 페이지 열기
@@ -771,10 +779,71 @@ class TokenInterceptor extends Interceptor {
 4. **토큰 갱신**: 401 에러 시 자동으로 토큰 갱신
 5. **Deep Link**: 각 플랫폼별로 정확히 설정
 6. **State 값**: CSRF 방지를 위해 State 값 검증
+7. **Scope 설정**: `/oauth/authorize` 호출 시 `scope` 파라미터로 필요한 권한만 요청
+8. **Scope 부족 처리**: 403 응답 시 해당 기능은 공식 앱에서만 사용 가능하다고 안내
 
 ---
 
+## Scope 관련 추가 가이드
+
+### 공식 앱 vs 타사 앱 scope 요청
+
+```dart
+// 공식 앱 (전체 권한)
+const String officialScope =
+    'profile email profile:write account:password account:manage 2fa:manage sessions:manage';
+
+await oauthService.startOAuthLogin(scope: officialScope);
+
+// 타사 앱 (최소 권한)
+const String thirdPartyScope = 'profile email';
+
+await oauthService.startOAuthLogin(scope: thirdPartyScope);
+```
+
+### 403 Scope 부족 에러 처리
+
+```dart
+Future<void> handleApiError(DioException e) async {
+  if (e.response?.statusCode == 403) {
+    final error = e.response?.data['error'] as String?;
+    if (error?.contains('Insufficient scope') == true) {
+      await showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text('권한 부족'),
+          content: Text('해당 기능은 공식 앱에서만 사용할 수 있습니다.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('확인'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+  }
+  // 기타 에러 처리
+}
+```
+
+### Token 응답에서 scope 확인
+
+`/oauth/token` 응답에 `scope` 필드가 포함되어 있습니다. 클라이언트는 이를 저장하여 기능 노출 여부를 결정할 수 있습니다.
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzUxMiJ9...",
+  "refresh_token": "eyJhbGciOiJIUzUxMiJ9...",
+  "token_type": "Bearer",
+  "expires_in": 86400000,
+  "scope": "profile email"
+}
+```
+
 ## 다음 단계
 
+- [SCOPE_API_GUIDE.md](SCOPE_API_GUIDE.md) - Scope 목록 및 API 매핑
 - FLUTTER_TOKEN_MANAGEMENT.md - 고급 토큰 관리
 - FLUTTER_AUTO_LOGIN.md - 자동 로그인 구현
