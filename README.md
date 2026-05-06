@@ -1,8 +1,8 @@
-# Hyfata REST API
+# Hyfata Auth API
 
-**A Production-Ready REST API with OAuth 2.0 + PKCE and Session Management**
+**Production-Ready OAuth 2.0 Authorization Server with Scope-based Access Control**
 
-Spring Boot 3.4.4 기반의 멀티테넌시 인증 API. Google OAuth, Discord OAuth와 동일한 보안 표준을 따릅니다.
+Spring Boot 3.4.4 기반의 OAuth 2.0 인증/인가 서버. Google OAuth, Discord OAuth와 동일한 보안 표준을 따를며, **Scope 기반 세분화된 접근 제어**를 지원합니다.
 
 ---
 
@@ -20,8 +20,14 @@ Spring Boot 3.4.4 기반의 멀티테넌시 인증 API. Google OAuth, Discord OA
 - 원격 로그아웃 (다른 기기 세션 무효화)
 - Redis 기반 토큰 블랙리스트
 
+### Scope 기반 접근 제어
+- OAuth 2.0 Scope 표준 준수 (RFC 6749)
+- 클라이언트별 `defaultScopes` / `allowedScopes` 설정
+- 민감 API(`account:password`, `2fa:manage` 등)에 `@RequireScope` 적용
+- 관리자만 민감 Scope를 가진 클라이언트 등록 가능
+
 ### 완전한 인증 시스템
-- JWT 기반 토큰 (Access: 24시간, Refresh: 7일)
+- JWT 기반 토큰 (Access: 15분, Refresh: 14일)
 - BCrypt 비밀번호 암호화
 - 2FA (이메일 기반)
 - 이메일 검증
@@ -29,7 +35,7 @@ Spring Boot 3.4.4 기반의 멀티테넌시 인증 API. Google OAuth, Discord OA
 
 ### 프로덕션 준비
 - PostgreSQL 데이터베이스
-- Redis (세션 블랙리스트)
+- Redis (토큰 블랙리스트 + 서버사이드 세션)
 - 만료 코드 자동 정리 스케줄러
 - 상세 로깅
 
@@ -46,24 +52,24 @@ Spring Boot 3.4.4 기반의 멀티테넌시 인증 API. Google OAuth, Discord OA
 ### 환경 변수 설정 (.env)
 ```properties
 # Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=rest_api
-DB_USERNAME=postgres
+DB_URL=jdbc:postgresql://localhost:5432/hyfata_db
+DB_USER=postgres
 DB_PASSWORD=your_password
 
 # JWT
-JWT_SECRET=your-secret-key-min-32-characters
+JWT_SECRET=minimum-32-characters-strong-secret-key
 
 # Redis
 REDIS_HOST=localhost
 REDIS_PORT=6379
+REDIS_PASSWORD=
 
 # Mail (optional)
-MAIL_HOST=smtp.example.com
+MAIL_HOST_NAME=mail.hyfata.kr
 MAIL_PORT=587
-MAIL_USERNAME=noreply@example.com
+MAIL_USERNAME=noreply@hyfata.kr
 MAIL_PASSWORD=your_password
+MAIL_FROM=noreply@hyfata.kr
 ```
 
 ### 빌드 및 실행
@@ -92,19 +98,34 @@ MAIL_PASSWORD=your_password
 | POST | `/oauth/token` | Token 발급 (`authorization_code`, `refresh_token`) |
 | POST | `/oauth/logout` | OAuth 로그아웃 (인증 필요) |
 
-### 세션 관리 엔드포인트
+### 계정 관리
 
-| 메서드 | 엔드포인트 | 설명 |
-|--------|-----------|------|
-| GET | `/api/sessions` | 활성 세션 목록 조회 |
-| DELETE | `/api/sessions/{sessionId}` | 특정 세션 무효화 |
-| DELETE | `/api/sessions/others` | 현재 세션 외 모두 무효화 |
+| 메서드 | 엔드포인트 | 설명 | 필요 Scope |
+|--------|-----------|------|-----------|
+| PUT | `/api/account/password` | 비밀번호 변경 | `account:password` |
+| POST | `/api/account/deactivate` | 계정 비활성화 | `account:manage` |
+| DELETE | `/api/account` | 계정 영구 삭제 | `account:manage` |
+
+### 세션 관리
+
+| 메서드 | 엔드포인트 | 설명 | 필요 Scope |
+|--------|-----------|------|-----------|
+| GET | `/api/sessions` | 활성 세션 목록 조회 | `sessions:manage` |
+| DELETE | `/api/sessions/{sessionId}` | 특정 세션 무효화 | `sessions:manage` |
+| POST | `/api/sessions/revoke-others` | 현재 세션 외 모두 무효화 | `sessions:manage` |
+
+### 2FA 관리
+
+| 메서드 | 엔드포인트 | 설명 | 필요 Scope |
+|--------|-----------|------|-----------|
+| POST | `/api/auth/enable-2fa` | 2FA 활성화 | `2fa:manage` |
+| POST | `/api/auth/disable-2fa` | 2FA 비활성화 | `2fa:manage` |
 
 ### 클라이언트 관리
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|-----------|------|
-| POST | `/api/clients/register` | 새 클라이언트 등록 |
+| POST | `/api/clients/register` | 새 클라이언트 등록 (인증 필요) |
 | GET | `/api/clients/{clientId}` | 클라이언트 정보 조회 |
 
 ### 레거시 API (Deprecated)
@@ -127,6 +148,7 @@ MAIL_PASSWORD=your_password
      └─ 3. GET /oauth/authorize ──────────────────>
            ?client_id=...
            &redirect_uri=...
+           &scope=profile+email
            &code_challenge=...
            &code_challenge_method=S256
                                           └─ 로그인 페이지 반환
@@ -176,6 +198,7 @@ MAIL_PASSWORD=your_password
 | **PKCE** | Authorization Code 탈취 방지 (RFC 7636) |
 | **State** | CSRF 공격 방지 |
 | **토큰 로테이션** | Refresh 시 새 토큰 발급, 기존 무효화 |
+| **Scope 기반 접근 제어** | 민감 API에 `@RequireScope` 적용 |
 | **JTI 블랙리스트** | 로그아웃 시 Access Token 즉시 무효화 |
 | **세션 제한** | 사용자당 최대 5개 동시 세션 |
 | **BCrypt** | 비밀번호 해싱 (Salt 자동 생성) |
@@ -191,7 +214,7 @@ MAIL_PASSWORD=your_password
 │  ┌─────────────────────────────────┐    │
 │  │  OAuth 2.0 + PKCE Layer         │    │
 │  │  - Authorization Code Flow      │    │
-│  │  - Token Exchange               │    │
+│  │  - Scope Validation             │    │
 │  │  - PKCE Verification            │    │
 │  └─────────────────────────────────┘    │
 │                  ↓                      │
@@ -205,14 +228,14 @@ MAIL_PASSWORD=your_password
 │  ┌─────────────────────────────────┐    │
 │  │  Authentication Layer           │    │
 │  │  - JWT Token Management         │    │
-│  │  - Password Hashing             │    │
+│  │  - Scope-based Access Control   │    │
 │  │  - 2FA/Email Verification       │    │
 │  └─────────────────────────────────┘    │
 │                  ↓                      │
 │  ┌─────────────────────────────────┐    │
 │  │  Data Layer                     │    │
 │  │  - PostgreSQL (JPA)             │    │
-│  │  - Redis (Blacklist)            │    │
+│  │  - Redis (Blacklist + Session)  │    │
 │  └─────────────────────────────────┘    │
 └─────────────────────────────────────────┘
 ```
@@ -224,19 +247,21 @@ MAIL_PASSWORD=your_password
 | 테이블 | 목적 |
 |--------|------|
 | `users` | 사용자 정보 및 인증 |
-| `clients` | OAuth 클라이언트 정보 |
-| `authorization_codes` | Authorization Code 저장 |
-| `user_sessions` | 사용자 세션 정보 |
+| `clients` | OAuth 클라이언트 정보 (scope 포함) |
+| `authorization_codes` | Authorization Code 저장 (scope 포함) |
+| `user_sessions` | 사용자 세션 정보 (scope 포함) |
+| `login_history` | 로그인 이력 |
 
 ---
 
 ## 문서
 
-**상세 문서는 [Wiki](https://github.com/Hyfata/Hyfata-API/wiki)에서 확인하세요:**
+**상세 문서:**
 
-- [OAuth 2.0 + PKCE 구현](https://github.com/Hyfata/Hyfata-API/wiki/OAuth-2.0-Authorization-Code-Flow)
-- [세션 관리](https://github.com/Hyfata/Hyfata-API/wiki/Session-Management)
-- [데이터베이스 스키마](https://github.com/Hyfata/Hyfata-API/wiki/Database-Schema-&-Guide)
+- [`docs/auth/AUTH_API.md`](docs/auth/AUTH_API.md) — 전체 API 레퍼런스
+- [`docs/auth/SCOPE_API_GUIDE.md`](docs/auth/SCOPE_API_GUIDE.md) — Scope 목록 및 API 매핑
+- [`docs/auth/OAUTH_SCOPES_DESIGN.md`](docs/auth/OAUTH_SCOPES_DESIGN.md) — Scope 설계 문서
+- [Wiki](https://github.com/Hyfata/Hyfata-API/wiki)
 
 ---
 
@@ -257,7 +282,7 @@ MAIL_PASSWORD=your_password
 - [x] OAuth 2.0 + PKCE 지원
 - [x] 세션 관리 (다중 기기)
 - [x] 토큰 로테이션
-- [ ] OAuth 2.0 Scopes 세분화
+- [x] OAuth 2.0 Scopes 세분화 및 접근 제어
 - [ ] Rate Limiting
 - [ ] WebAuthn 지원
 
