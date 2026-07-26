@@ -5,16 +5,13 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import kr.hyfata.rest.api.auth.service.TokenBlacklistService;
-import kr.hyfata.rest.api.common.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -22,13 +19,20 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * JTI 블랙리스트 전용 필터
+ * <p>
+ * 토큰 파싱·서명 검증은 Resource Server(BearerTokenAuthenticationFilter)가 처리하므로,
+ * 이 필터는 Resource Server 인증 이후 security.sensitive-endpoints에 매칭되는 경로에서만
+ * SecurityContext의 Jwt에서 jti를 꺼내 블랙리스트 여부를 검사한다.
+ * 세션 기반 인증(OAuth 로그인 폼 세션) 요청은 JWT가 없으므로 검사를 스킵한다.
+ * Redis 장애 시 fail-open (TokenBlacklistService가 false 반환) — 현행 정책 유지.
+ */
 @Component
 @Slf4j
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private final JwtUtil jwtUtil;
-    private final UserDetailsService userDetailsService;
     private final TokenBlacklistService tokenBlacklistService;
 
     @Value("${security.sensitive-endpoints:/api/auth/change-password,/api/users/me,/api/payments,/api/sessions}")
@@ -39,70 +43,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        try {
-            // 이미 세션에서 복원된 인증 정보가 있으면 JWT 검증 스킵 (OAuth 서버사이드 세션 지원)
-            if (SecurityContextHolder.getContext().getAuthentication() != null) {
-                log.debug("Authentication already present in SecurityContext (session-based), skipping JWT validation");
-                filterChain.doFilter(request, response);
-                return;
-            }
+        if (isSensitiveEndpoint(request.getRequestURI())) {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-            final String jwt = extractJwtFromRequest(request);
-
-            log.debug("JWT from request: {}", jwt != null ? "present" : "null");
-
-            if (jwt == null) {
-                log.debug("No JWT token in request");
-            } else if (!jwtUtil.validateToken(jwt)) {
-                log.warn("JWT validation failed for token");
-            }
-
-            if (jwt != null && jwtUtil.validateToken(jwt)) {
-                log.debug("JWT validation passed");
-                // 민감한 API인 경우 블랙리스트 확인
-                if (isSensitiveEndpoint(request.getRequestURI())) {
-                    String jti = jwtUtil.extractJti(jwt);
-                    if (jti != null && tokenBlacklistService.isJtiBlacklisted(jti)) {
-                        log.warn("Blocked request with revoked token to sensitive endpoint: {}", request.getRequestURI());
-                        response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                        response.setContentType("application/json");
-                        response.getWriter().write("{\"error\": \"Token has been revoked\"}");
-                        return;
-                    }
-                }
-
-                final String email = jwtUtil.extractEmail(jwt);
-                log.debug("Extracted email from JWT: {}", email);
-
-                final UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-                log.debug("Loaded user: {}, username: {}", userDetails != null, userDetails != null ? userDetails.getUsername() : "null");
-
-                if (jwtUtil.validateToken(jwt, userDetails)) {
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                    log.debug("Authentication set successfully for user: {}", email);
-                } else {
-                    log.warn("Token validation with userDetails failed for email: {}", email);
+            // JWT 기반 인증인 경우에만 블랙리스트 검사 (세션 기반 인증은 스킵)
+            if (authentication instanceof JwtAuthenticationToken jwtAuthentication) {
+                String jti = jwtAuthentication.getToken().getId();
+                if (jti != null && tokenBlacklistService.isJtiBlacklisted(jti)) {
+                    log.warn("Blocked request with revoked token to sensitive endpoint: {}", request.getRequestURI());
+                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\": \"Token has been revoked\"}");
+                    return;
                 }
             }
-        } catch (Exception e) {
-            log.error("Cannot set user authentication: {}", e.getMessage());
         }
 
         filterChain.doFilter(request, response);
-    }
-
-    /**
-     * Authorization 헤더에서 JWT 토큰 추출
-     */
-    private String extractJwtFromRequest(HttpServletRequest request) {
-        final String bearerToken = request.getHeader("Authorization");
-        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
-        }
-        return null;
     }
 
     /**

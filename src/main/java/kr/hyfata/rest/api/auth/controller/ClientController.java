@@ -38,14 +38,11 @@ public class ClientController {
      *   "description": "My web application",
      *   "frontendUrl": "https://myapp.com",
      *   "redirectUris": ["https://myapp.com/callback", "https://myapp.com/auth"],
-     *   "maxTokensPerUser": 5,
-     *   "defaultScopes": "profile email",
      *   "allowedScopes": "profile email profile:write account:password account:manage 2fa:manage sessions:manage"
      * }
      *
      * 응답:
      * {
-     *   "id": 1,
      *   "clientId": "client_1697...",
      *   "clientSecret": "...",
      *   "name": "My Web App",

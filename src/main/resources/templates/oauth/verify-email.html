@@ -120,7 +120,7 @@
             메일이 도착하지 않았다면 스팸 폴더를 확인해 주세요.
         </div>
 
-        <a th:href="@{/oauth/authorize(client_id=${client_id}, redirect_uri=${redirect_uri}, response_type='code', state=${state}, code_challenge=${code_challenge}, code_challenge_method=${code_challenge_method})}" class="login-btn">
+        <a th:href="@{/oauth/login}" class="login-btn">
             로그인 화면으로
         </a>
     </div>

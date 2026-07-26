@@ -58,6 +58,11 @@ public interface UserSessionRepository extends JpaRepository<UserSession, String
     Optional<UserSession> findByAccessTokenJti(String accessTokenJti);
 
     /**
+     * SAS OAuth2Authorization ID로 세션 조회 (세션 브리징용)
+     */
+    Optional<UserSession> findByAuthorizationId(String authorizationId);
+
+    /**
      * 특정 사용자의 모든 세션 무효화
      */
     @Modifying

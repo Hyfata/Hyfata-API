@@ -1,6 +1,5 @@
 package kr.hyfata.rest.api.common.security;
 
-import kr.hyfata.rest.api.common.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
@@ -11,16 +10,23 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 
+/**
+ * WebSocket(STOMP) CONNECT 시 JWT를 검증하는 인터셉터.
+ * Resource Server와 동일한 JwtDecoder(RS256, SAS RSA 공개키)로 검증한다.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class JwtChannelInterceptor implements ChannelInterceptor {
 
-    private final JwtUtil jwtUtil;
+    private final JwtDecoder jwtDecoder;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -44,9 +50,14 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
                 throw new IllegalArgumentException("JWT token is required");
             }
 
-            // JWT 토큰 검증
-            if (jwtUtil.validateToken(token)) {
-                String email = jwtUtil.extractEmail(token);
+            // JWT 토큰 검증 (서명 + 만료)
+            try {
+                Jwt jwt = jwtDecoder.decode(token);
+                // email 클레임 우선, 없으면 sub (둘 다 사용자 이메일)
+                String email = jwt.getClaimAsString("email");
+                if (email == null) {
+                    email = jwt.getSubject();
+                }
                 log.info("WebSocket connection authenticated for user: {}", email);
 
                 // 검증된 사용자 정보를 Authentication에 설정
@@ -57,8 +68,8 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
                         new ArrayList<>()
                 );
                 accessor.setUser(authentication);
-            } else {
-                log.warn("Invalid JWT token provided for WebSocket connection");
+            } catch (JwtException e) {
+                log.warn("Invalid JWT token provided for WebSocket connection: {}", e.getMessage());
                 throw new IllegalArgumentException("Invalid JWT token");
             }
         }

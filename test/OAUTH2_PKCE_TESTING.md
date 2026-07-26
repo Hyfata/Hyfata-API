@@ -45,11 +45,12 @@ cd /Users/najoan/IdeaProjects/Hyfata-RestAPI
 🔹 Section 2: Email Verification
    └─ 이메일 검증 (DB 업데이트 또는 API 호출)
 
-🔹 Section 3: OAuth 2.0 + PKCE Login Flow
+🔹 Section 3: OAuth 2.0 + PKCE Login Flow (SAS)
    ├─ 3-1. Generate Code Challenge
-   ├─ 3-2. Authorization Request
-   ├─ 3-3. Login (Authorization Code 획득)
-   └─ 3-4. Token Exchange (Access Token 획득 + 세션 생성)
+   ├─ 3-2. Authorization Request (302 → 로그인 페이지)
+   ├─ 3-3. Login (formLogin, email/password만 전송)
+   ├─ 3-3b. Resume Authorization (Authorization Code 획득)
+   └─ 3-4. Token Exchange (Basic 인증, Access Token 획득 + 세션 생성)
 
 🔹 Section 4: Token Usage & Session Management
    ├─ 4-1. OAuth Refresh Token (토큰 갱신 + 세션 로테이션)
@@ -84,8 +85,7 @@ cd /Users/najoan/IdeaProjects/Hyfata-RestAPI
   "redirectUris": [
     "http://localhost:3000/callback",
     "http://localhost:3001/callback"
-  ],
-  "maxTokensPerUser": 5
+  ]
 }
 ```
 
@@ -208,20 +208,25 @@ code_challenge={{code_challenge}}
 code_challenge_method=S256
 ```
 
-**Expected Response** (200 OK):
-- HTML 로그인 페이지
-- 숨겨진 필드에 `client_id`, `redirect_uri`, `state`, `code_challenge` 포함
+**Expected Response** (302 Found):
+```
+Location: /oauth/login
+```
+
+**SAS 동작**:
+- authorize 요청을 세션(request cache)에 저장하고 로그인 페이지로 리다이렉트합니다
+- 로그인 성공 후 저장된 요청이 자동 재개되므로, 로그인 폼에 OAuth 파라미터를 전달할 필요가 없습니다
 
 **실제 서비스에서는**:
 - 사용자가 브라우저에서 이 URL을 방문
-- 로그인 폼이 표시됨
+- 로그인 폼이 표시됨 (THIRD_PARTY 클라이언트는 로그인 후 consent 화며이 추가 표시됨)
 - 이메일/비밀번호 입력
 
 ---
 
-### 3-3. Login & Get Authorization Code
+### 3-3. Login (formLogin)
 
-**Postman Request**: `3-3. Login & Get Authorization Code`
+**Postman Request**: `3-3. Login (formLogin)`
 
 **Method**: POST
 **URL**: `{{base_url}}/oauth/login`
@@ -230,25 +235,43 @@ code_challenge_method=S256
 ```
 email=testuser@example.com
 password=TestPassword123!
-client_id={{client_id}}
-redirect_uri={{redirect_uri}}
-state={{state}}
-code_challenge={{code_challenge}}
-code_challenge_method=S256
 ```
+
+> OAuth 파라미터(client_id, state, code_challenge 등)는 **전송하지 않습니다**.
+> 서버가 request cache에 저장해 둔 authorize 요청을 자동으로 재개합니다.
+
+**Expected Response** (302 Redirect):
+```
+Location: http://localhost:8080/oauth/authorize?client_id=...&code_challenge=... (저장된 authorize 요청)
+```
+
+**Postman 설정**:
+- Settings → "Automatically follow redirects" **끄기**
+- Test 스크립트가 `resume_url` 변수에 Location을 저장
+
+**로그인 실패 시**: `/oauth/login?error=credentials|disabled|unverified`로 리다이렉트됩니다.
+
+---
+
+### 3-3b. Resume Authorization (Authorization Code 획득)
+
+**Postman Request**: `3-3b. Resume Authorization (get code)`
+
+**Method**: GET
+**URL**: `{{resume_url}}`
+
+로그인으로 발급된 세션 쿠키(`HYFATA_SESSION`)가 Postman에 의해 자동 전송되고,
+인증된 상태로 authorize가 재개되어 콜백으로 리다이렉트됩니다.
 
 **Expected Response** (302 Redirect):
 ```
 Location: http://localhost:3000/callback?code=AUTH_CODE_HERE&state=STATE_HERE
 ```
 
-**Postman 설정**:
-- Settings → "Automatically follow redirects" **끄기** (Location 헤더 확인용)
-- Test 스크립트가 자동으로 `authorization_code` 추출
-
 **실행 후 확인**:
 - Headers 탭에서 `Location` 헤더 확인
 - Variables에 `authorization_code` 저장 확인
+- `state`가 3-1에서 생성한 값과 일치하는지 테스트 스크립트가 검증
 
 ---
 
@@ -258,36 +281,35 @@ Location: http://localhost:3000/callback?code=AUTH_CODE_HERE&state=STATE_HERE
 
 **Method**: POST
 **URL**: `{{base_url}}/oauth/token`
+**Authorization**: Basic Auth (username=`{{client_id}}`, password=`{{client_secret}}`)
 **Content-Type**: `application/x-www-form-urlencoded`
 **Body**:
 ```
 grant_type=authorization_code
 code={{authorization_code}}
-client_id={{client_id}}
-client_secret={{client_secret}}
 redirect_uri={{redirect_uri}}
 code_verifier={{code_verifier}}
 ```
 
+> **변경**: confidential 클라이언트는 `client_id`/`client_secret`을 본문이 아닌 **HTTP Basic 인증 헤더**로 전송합니다
+> (SAS의 `client_secret_basic` 방식). Public 클라이언트는 Basic 인증 없이 `client_id` 본문 파라미터만 전송합니다.
+
 **Expected Response** (200 OK):
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "eyJhbGciOiJSUzI1NiJ9... (RS256 JWT, 15분 유효)",
+  "refresh_token": "k8s3hd... (opaque 문자열, 14일 유효)",
   "token_type": "Bearer",
-  "expires_in": 86400000,
-  "scope": "user:email user:profile"
+  "expires_in": 900,
+  "scope": "profile email"
 }
 ```
 
 **중요**:
+- `expires_in`은 **초 단위(900 = 15분)**입니다
 - `code_verifier`가 3-1에서 생성한 값과 일치해야 함
 - 서버는 `SHA256(code_verifier) == code_challenge`를 검증
-- 검증 성공 시 Access Token & Refresh Token 발급
-
-**실행 후 확인**:
-- `access_token`과 `refresh_token`이 Variables에 저장됨
-- Console에서 성공 메시지 확인
+- 검증 성공 시 Access Token(RS256 JWT) & Refresh Token(opaque) 발급 + 세션 생성
 
 ---
 
@@ -299,33 +321,33 @@ code_verifier={{code_verifier}}
 
 **Method**: POST
 **URL**: `{{base_url}}/oauth/token`
+**Authorization**: Basic Auth (username=`{{client_id}}`, password=`{{client_secret}}`)
 **Content-Type**: `application/x-www-form-urlencoded`
 **Body**:
 ```
 grant_type=refresh_token
 refresh_token={{refresh_token}}
-client_id={{client_id}}
-client_secret={{client_secret}}
 ```
 
 **Expected Response** (200 OK):
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "eyJhbGciOiJSUzI1NiJ9...(새 토큰)",
+  "refresh_token": "m2j9kl...(새 Refresh Token)",
   "token_type": "Bearer",
-  "expires_in": 86400000,
-  "scope": "user:email user:profile"
+  "expires_in": 900,
+  "scope": "profile email"
 }
 ```
 
 **중요**:
-- **토큰 로테이션**: 갱신 시 새로운 Refresh Token도 발급됨 (기존 토큰 무효화)
+- **토큰 로테이션**: 갱신 시 새로운 Refresh Token도 발급됨 (기존 토큰 즉시 무효화)
+- **Reuse detection**: 무효화된 Refresh Token을 재사용하면 해당 세션 전체가 즉시 무효화됨
 - **세션 관리**: 자동으로 새 세션 생성, 기존 세션 무효화
 - 갱신 후 반드시 새로운 `access_token`과 `refresh_token`으로 업데이트
 
 **언제 사용하나?**
-- Access Token이 만료되었을 때 (24시간 후)
+- Access Token이 만료되었을 때 (15분 후)
 - 새로운 Access Token을 발급받을 수 있음
 
 ---
@@ -394,6 +416,7 @@ Authorization: Bearer {{access_token}}
 **Expected Response** (200 OK):
 ```json
 {
+  "totalSessions": 1,
   "sessions": [
     {
       "sessionId": "abc123def456...",
@@ -403,11 +426,10 @@ Authorization: Bearer {{access_token}}
       "location": "Seoul, South Korea",
       "lastActiveAt": "2024-01-15T10:30:00",
       "createdAt": "2024-01-15T09:00:00",
+      "expiresAt": "2024-01-29T09:00:00",
       "isCurrent": true
     }
-  ],
-  "totalCount": 1,
-  "maxAllowed": 5
+  ]
 }
 ```
 
@@ -427,7 +449,6 @@ Authorization: Bearer {{access_token}}
 **Expected Response** (200 OK):
 ```json
 {
-  "success": true,
   "message": "Session revoked successfully"
 }
 ```
@@ -442,11 +463,11 @@ Authorization: Bearer {{access_token}}
 
 Token Exchange를 잘못된 `code_verifier`로 시도:
 
-**Expected** (400 Bad Request):
+**Expected** (400 Bad Request, SAS):
 ```json
 {
   "error": "invalid_grant",
-  "error_description": "PKCE verification failed: code_verifier does not match code_challenge"
+  "error_description": "..."
 }
 ```
 
@@ -458,11 +479,11 @@ Token Exchange를 잘못된 `code_verifier`로 시도:
 
 Token Exchange에서 `code_verifier`를 빼고 시도:
 
-**Expected** (400 Bad Request):
+**Expected** (400/401, SAS):
 ```json
 {
-  "error": "invalid_grant",
-  "error_description": "code_verifier is required (code_challenge was provided)"
+  "error": "invalid_request",
+  "error_description": "..."
 }
 ```
 
@@ -474,15 +495,15 @@ Token Exchange에서 `code_verifier`를 빼고 시도:
 
 3-4에서 성공한 후, 같은 `authorization_code`로 다시 시도:
 
-**Expected** (400 Bad Request):
+**Expected** (400 Bad Request, SAS):
 ```json
 {
   "error": "invalid_grant",
-  "error_description": "Authorization code has already been used"
+  "error_description": "..."
 }
 ```
 
-**이유**: Authorization Code는 **일회성**입니다.
+**이유**: Authorization Code는 **일회성**이며, 재사용 시 SAS가 해당 authorization 전체를 무효화합니다.
 
 ---
 
@@ -542,9 +563,10 @@ Token Exchange에서 `code_verifier`를 빼고 시도:
 - [ ] Section 1: 회원가입
 - [ ] Section 2: 이메일 검증 (DB)
 - [ ] Section 3-1: Code Challenge 생성
-- [ ] Section 3-2: Authorization Request
-- [ ] Section 3-3: Login (Authorization Code 획득)
-- [ ] Section 3-4: Token Exchange (Access Token 획득 + 세션 생성)
+- [ ] Section 3-2: Authorization Request (302 → 로그인)
+- [ ] Section 3-3: Login (formLogin)
+- [ ] Section 3-3b: Resume Authorization (Authorization Code 획득)
+- [ ] Section 3-4: Token Exchange (Basic 인증, Access Token 획득 + 세션 생성)
 - [ ] Section 4-1: OAuth Refresh Token 테스트
 - [ ] Section 4-2: OAuth Logout 테스트
 - [ ] Section 4-4: 세션 목록 조회
@@ -560,9 +582,12 @@ Token Exchange에서 `code_verifier`를 빼고 시도:
 - Authorization Code 탈취 공격 방지
 - 모바일/데스크톱 앱에 필수
 
-### OAuth 2.0 vs 레거시 로그인
-| 비교 | 레거시 (POST /api/auth/login) | OAuth 2.0 + PKCE |
-|------|-------------------------------|------------------|
+### 레거시 로그인 엔드포인트 (삭제됨)
+
+`POST /api/auth/login`, `POST /api/auth/refresh`는 **삭제**되었습니다.
+모든 로그인/토큰 갱신은 OAuth 2.0 + PKCE 흐름(SAS)을 사용하세요.
+
+------|-------------------------------|------------------|
 | 사용처 | 직접 인증 (자체 앱) | 제3자 앱, 모바일 앱 |
 | 보안 | JWT만 사용 | PKCE + State + Client Secret |
 | 토큰 | Access + Refresh | Access + Refresh |

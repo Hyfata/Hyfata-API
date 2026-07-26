@@ -8,8 +8,8 @@
 
 **Hyfata REST API**는 Spring Boot 3.4.4 기반의 멀티테넌시 인증 및 소셜 플랫폼 API 서버입니다. 주요 특징은 다음과 같습니다:
 
-- **OAuth 2.0 Authorization Code Flow + PKCE** (RFC 7636) 구현
-- **JWT 기반 인증** (Access Token 24시간, Refresh Token 7일)
+- **Spring Authorization Server(SAS) 기반 OAuth 2.0/2.1** — Authorization Code Flow + PKCE(필수), RS256 JWT, JWKS 공개
+- **JWT 기반 인증** (RS256, Access Token 15분, Refresh Token 14일 opaque, 로테이션 + reuse detection)
 - **세션 관리** (사용자당 최대 5개 동시 세션, Redis 기반 JTI 블랙리스트)
 
 
@@ -23,7 +23,7 @@
 | 데이터베이스 | PostgreSQL 12+ (운영), H2 (테스트) |
 | 캐시/블랙리스트 | Redis 6+ |
 | JPA/Hibernate | Spring Data JPA |
-| 보안 | Spring Security, JJWT 0.12.3, BCrypt |
+| 보안 | Spring Security, Spring Authorization Server 1.4.x (RS256), BCrypt |
 | 템플릿 엔진 | Thymeleaf (OAuth 로그인/회원가입 페이지) |
 | 실시간 통신 | Spring WebSocket (STOMP) |
 | 메일 | Spring Mail (SMTP) |
@@ -37,36 +37,31 @@
 src/main/java/kr/hyfata/rest/api/
 ├── HyfataRestApiApplication.java          # 메인 애플리케이션 클래스
 ├── auth/                                  # 인증/인가 모듈
-│   ├── controller/                        # OAuth, 세션, 계정, 클라이언트 컨트롤러
+│   ├── controller/                        # OAuth(페이지/로그아웃), 세션, 계정, 클라이언트 컨트롤러
 │   ├── dto/                               # 요청/응답 DTO
-│   ├── entity/                            # JPA 엔티티 (User, Client, AuthorizationCode, UserSession, LoginHistory)
+│   ├── entity/                            # JPA 엔티티 (User, ClientMetadata, UserSession, LoginHistory)
 │   ├── repository/                        # Spring Data JPA 리포지토리
-│   ├── scheduler/                         # OAuthCleanupScheduler (만료 코드 자동 정리)
 │   └── service/                           # 서비스 인터페이스 및 구현체
-│       └── impl/
+│       └── impl/                          # SessionBridgingAuthorizationService, RegisteredClientFactory 포함
 └── common/                                # 공통 모듈
-    ├── config/                            # Security, Redis, WebSocket 등 설정
+    ├── config/                            # SecurityConfig, AuthorizationServerConfig(SAS), Redis 등 설정
     ├── exception/                         # GlobalExceptionHandler
-    ├── security/                          # JWT 인증 필터
+    ├── security/                          # JTI 블랙리스트 필터, scope AOP, WebSocket 인터셉터
     ├── service/                           # EmailService
-    └── util/                              # JwtUtil, PkceUtil, TokenGenerator, DeviceDetector, GeoIpService, IpUtil
+    └── util/                              # TokenGenerator, DeviceDetector, GeoIpService, IpUtil
 
 src/main/resources/
 ├── application.properties                 # 애플리케이션 설정 (환경 변수 기반)
 ├── .env                                   # 로컬 환경 변수 파일 (spring-dotenv 사용)
-├── db/migration/                          # Flyway 스타일 SQL 마이그레이션 파일
-│   ├── V1__create_users_table.sql
-│   ├── V2__create_clients_table.sql
-│   ├── V3__create_authorization_codes_table.sql
-│   ├── V4__add_pkce_to_authorization_codes.sql
-│   ├── V5__encrypt_client_secrets.sql
-│   └── V6__change_client_owner_to_fk.sql
+├── db/sas-schema.sql                      # SAS 표준 테이블 DDL (spring.sql.init로 자동 적용)
 └── templates/oauth/                       # Thymeleaf 템플릿 (login, register, error, verify-email)
 
 src/test/
 ├── java/kr/hyfata/rest/api/             # 테스트 클래스
-│   ├── service/                           # AuthServiceTest, SessionServiceTest, TokenBlacklistServiceTest
-│   └── util/                              # JwtUtilTest, DeviceDetectorTest, IpUtilTest
+│   ├── service/                           # Auth/Session/TokenBlacklist/Client/SAS 브리징 테스트
+│   ├── config/                            # FirstPartyClientInitializerTest, JwtTokenCustomizerTest
+│   ├── security/                          # ScopeAuthorizationAspectTest
+│   └── util/                              # DeviceDetectorTest, IpUtilTest
 └── resources/application-test.properties  # 테스트 프로필 설정 (H2 사용)
 
 docs/
@@ -100,8 +95,12 @@ DB_URL=jdbc:postgresql://localhost:5432/hyfata_db
 DB_USER=postgres
 DB_PASSWORD=...
 
-# JWT
-JWT_SECRET=minimum-32-characters-strong-secret-key
+# SAS Issuer (선택, 기본값 https://api.hyfata.kr)
+AUTH_ISSUER=https://api.hyfata.kr
+
+# JWT RSA 키 (선택 — 미설정 시 시작 시 임시 RSA 2048 키페어 생성, 개발용)
+JWT_PRIVATE_KEY_PATH=file:./keys/private.pem
+JWT_PUBLIC_KEY_PATH=file:./keys/public.pem
 
 # Redis
 REDIS_HOST=localhost
@@ -156,7 +155,7 @@ FIREBASE_CONFIG_PATH=./firebase.json
 ./gradlew test
 
 # 특정 테스트 클래스만 실행
-./gradlew test --tests "*JwtUtilTest*"
+./gradlew test --tests "*ScopeAuthorizationAspectTest*"
 
 # 테스트 리포트 보기
 open build/reports/tests/test/index.html
@@ -164,15 +163,16 @@ open build/reports/tests/test/index.html
 
 ### 테스트 설정
 
+- **JDK 주의**: Gradle 8.13은 Java 25에서 동작하지 않습니다. 기본 셸 Java가 25이면 `JAVA_HOME`을 Java 21로 지정하세요 (예: `JAVA_HOME=/root/.sdkman/candidates/java/21.0.11-graal ./gradlew test`). `.sdkmanrc`에 `java=21.0.11-graal`이 설정되어 있습니다.
 - **테스트 DB**: H2 In-Memory (`jdbc:h2:mem:testdb`)
 - **테스트 프로필**: `@ActiveProfiles("test")`
 - **Mocking**: `@MockitoBean`을 사용하여 `EmailService` 등 외부 의존성을 모킹합니다.
-- **단위 테스트**: `JwtUtilTest`, `DeviceDetectorTest`, `IpUtilTest`처럼 순수 자바 객체는 단위 테스트로 작성됩니다.
+- **단위 테스트**: `DeviceDetectorTest`, `IpUtilTest`, `ScopeAuthorizationAspectTest`, SAS 어댑터/브리징 테스트 등은 Mockito 기반 단위 테스트로 작성됩니다.
 - **통합 테스트**: `AuthServiceTest`, `SessionServiceTest`는 `@SpringBootTest`를 사용한 통합 테스트입니다.
 
 ### 테스트 커버리지 현황
 
-현재 테스트 파일은 7개로, 주요 유틸리티와 핵심 인증 서비스에 집중되어 있습니다.
+현재 테스트 파일은 11개(총 85개 케이스)로, 유틸리티·세션·SAS 매핑/브리징·토큰 커스터마이저 등을 커버합니다.
 
 ---
 
@@ -232,25 +232,32 @@ public class AuthServiceImpl implements AuthService { ... }
 
 ## 보안 고려사항
 
-### JWT 및 토큰 관리
+### JWT 및 토큰 관리 (SAS)
 
-- **Access Token**: 15분(`jwt.expiration=900000`) — `application.properties` 기준. README에는 24시간으로 되어 있으나 실제 설정은 15분입니다.
-- **Refresh Token**: 14일(`jwt.refresh-expiration=1209600000`)
-- **JTI (JWT ID)**: 각 Access Token에 고유 JTI를 포함하며, 로그아웃 시 Redis 블랙리스트에 등록됩니다.
-- **민감 엔드포인트**: `security.sensitive-endpoints`에 설정된 경로는 블랙리스트된 토큰으로 접근 불가.
-- **OAuth 로그인 세션**: `/oauth/login`, `/oauth/authorize`는 서버사이드 세션(`Spring Session + Redis`) 기반. 브라우저는 `HYFATA_SESSION` 쿠키로 세션을 유지하며, JWT는 `/oauth/token` 발급 시에만 사용됩니다.
+- **Access Token**: RS256 JWT, 15분 (SAS `TokenSettings`, 등록 시 `RegisteredClientFactory`로 클라이언트별 설정). 공개키는 `GET /oauth/jwks`.
+- **Refresh Token**: opaque 문자열, 14일. 갱신마다 로테이션되며, 무효 토큰 재사용 시 세션 전체 무효화 (SAS reuse detection).
+- **토큰 클레임**: `iss`(`auth.issuer`), `sub`/`email`(사용자 이메일), `client_id`, 공백 구분 `scope`, `jti`. 커스텀 클레임은 `AuthorizationServerConfig`의 `jwtTokenCustomizer`가 추가.
+- **JTI (JWT ID)**: 각 Access Token에 고유 JTI를 포함하며, 로그아웃/세션 무효화 시 Redis 블랙리스트에 등록됩니다.
+- **민감 엔드포인트**: `security.sensitive-endpoints`에 설정된 경로는 Resource Server 인증 후 JTI 블랙리스트를 추가 검사합니다 (`JwtAuthenticationFilter` — 블랙리스트 전용).
+- **Resource Server**: API 요청의 JWT 검증은 `oauth2ResourceServer().jwt()` (로컬 RSA 공개키)가 담당하고, scope는 `SCOPE_` prefix authority로 매핑됩니다.
+- **RSA 키**: `auth.jwt.private-key`/`auth.jwt.public-key`(PEM 경로)에서 로드. 미설정 시 개발용 임시 키페어를 시작 시 생성 (재시작 시 기존 토큰 무효화).
+- **OAuth 로그인 세션**: `/oauth/login`, `/oauth/authorize`는 서버사이드 세션(`Spring Session + Redis`) 기반. 브라우저는 `HYFATA_SESSION` 쿠키로 세션을 유지하며, 로그인은 Spring Security formLogin이 처리합니다.
 
-### OAuth 2.0 + PKCE
+### OAuth 2.0 + PKCE (SAS)
 
-- `code_challenge` + `code_verifier` 검증을 통해 Public Client(모바일/Flutter 앱) 보안 확보
-- `state` 파라미터로 CSRF 방지
-- Authorization Code는 일회용, 10분 유효
+- 프로토콜 엔드포인트(`/oauth/authorize`, `/oauth/token`, `/oauth/revoke`, `/oauth/introspect`, `/oauth/jwks`)는 SAS가 처리 (`AuthorizationServerConfig`, `@Order(1)` 필터 체인).
+- **PKCE(S256)는 모든 클라이언트에 필수** (`requireProofKey`).
+- confidential(클라이언트 시크릿 존재)은 `client_secret_basic`(Basic 헤더), public(시크릿 없음)은 `NONE`으로 인증 (`RegisteredClient.scopes`는 등록 시 `allowedScopes`에서 매핑 (저장소는 SAS 표준 `JdbcRegisteredClientRepository`)).
+- `state`는 클라이언트가 생성/검증 (서버 자동 생성 없음).
+- Authorization Code는 일회용, 10분 유효 (SAS 기본값).
+- THIRD_PARTY 클라이언트는 SAS 기본 consent 화면 표시, FIRST_PARTY는 `requireAuthorizationConsent(false)`로 생략.
 
 ### 세션 관리
 
-- **API 세션 (JWT 기반)**: 사용자당 최대 5개 동시 세션 (`session.max-per-user=5`). `user_sessions` 테이블에 Refresh Token 해시로 관리됩니다.
+- **API 세션 (SAS 토큰 기반)**: 사용자당 최대 5개 동시 세션 (`session.max-per-user=5`). `user_sessions` 테이블에 Refresh Token 해시(PK), JTI, client_id, SAS authorization_id, 기기/IP/위치가 저장됩니다.
+- **세션 브리징**: `SessionBridgingAuthorizationService`(OAuth2AuthorizationService 데코레이터)가 SAS 토큰 발급/로테이션/삭제 시점에 세션 미러링·LoginHistory 기록·JTI 블랙리스트를 수행합니다.
+- 세션 무효화(`SessionService`) 시 SAS authorization도 함께 제거되어 Refresh Token까지 무효화됩니다.
 - **OAuth 브라우저 세션 (서버사이드 세션)**: `/oauth/login`, `/oauth/authorize`는 `Spring Session + Redis` 기반. `HYFATA_SESSION` 쿠키로 유지됩니다.
-- 토큰 로테이션: Refresh 시 새 Refresh Token 발급, 기존 세션 무효화
 - 비밀번호 변경 시 모든 세션 무효화 (API 세션 + OAuth 브라우저 세션 모두 무효화)
 
 ### 비밀번호
@@ -265,15 +272,17 @@ public class AuthServiceImpl implements AuthService { ... }
 ### 운영 환경
 
 - **PostgreSQL** + JPA/Hibernate (`ddl-auto=update`)
-- 마이그레이션 파일은 `src/main/resources/db/migration/`에 수동으로 관리됩니다. (Flyway는 설정되어 있지 않으나, 파일 네이밍은 Flyway 스타일을 따릅니다.)
+- SAS 표준 테이블(`oauth2_registered_client`, `oauth2_authorization`, `oauth2_authorization_consent`)은 `src/main/resources/db/sas-schema.sql`이 `spring.sql.init`으로 자동 생성합니다. JPA 엔티티 테이블은 `ddl-auto=update`가 생성합니다. (운영 전 DB 신규 생성 기준, 별도 마이그레이션 파일 없음)
 
 ### 주요 테이블
 
 | 테이블 | 목적 |
 |--------|------|
 | `users` | 사용자 정보, 2FA, 비밀번호 재설정, 이메일 검증 |
-| `clients` | OAuth 클라이언트 정보 (client_id, client_secret, redirect_uri, owner_id FK → users) |
-| `authorization_codes` | OAuth Authorization Code 저장 (PKCE 포함) |
+| `oauth2_registered_client` | SAS RegisteredClient (시크릿, redirect_uri, scopes, client/token settings) |
+| `client_metadata` | 클라이언트 정보성 메타데이터 (owner FK → users, frontend_url, description, client_type) |
+| `oauth2_authorization` | SAS authorization (code/token/scope, V7) |
+| `oauth2_authorization_consent` | SAS consent 동의 내역 (V7) |
 | `user_sessions` | 사용자 세션 정보 (Refresh Token 해시, 기기 정보, IP, 위치) |
 | `login_history` | 로그인 이력 |
 

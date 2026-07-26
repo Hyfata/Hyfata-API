@@ -10,7 +10,6 @@ import kr.hyfata.rest.api.common.util.DeviceDetector;
 import kr.hyfata.rest.api.common.util.GeoIpService;
 import kr.hyfata.rest.api.common.util.IpUtil;
 import kr.hyfata.rest.api.auth.service.TokenBlacklistService;
-import kr.hyfata.rest.api.common.util.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,12 +17,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,7 +52,7 @@ class SessionServiceTest {
     private GeoIpService geoIpService;
 
     @Mock
-    private JwtUtil jwtUtil;
+    private ObjectProvider<OAuth2AuthorizationService> authorizationServiceProvider;
 
     @InjectMocks
     private SessionServiceImpl sessionService;
@@ -63,7 +63,6 @@ class SessionServiceTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(sessionService, "maxSessionsPerUser", 5);
-        ReflectionTestUtils.setField(sessionService, "refreshTokenExpiration", 1209600000L);
 
         testUser = User.builder()
                 .id(1L)
@@ -76,8 +75,8 @@ class SessionServiceTest {
     }
 
     @Test
-    @DisplayName("세션 생성 성공")
-    void createSession_success() {
+    @DisplayName("SAS 세션 생성 성공")
+    void createSasSession_success() {
         // given
         String refreshToken = "test-refresh-token";
         String accessTokenJti = "test-jti";
@@ -95,7 +94,8 @@ class SessionServiceTest {
         when(sessionRepository.save(any(UserSession.class))).thenAnswer(i -> i.getArgument(0));
 
         // when
-        UserSession result = sessionService.createSession(testUser, refreshToken, accessTokenJti, mockRequest);
+        UserSession result = sessionService.createSasSession(testUser, refreshToken, accessTokenJti,
+                "test-client", "test-authorization-id", null, mockRequest);
 
         // then
         assertThat(result).isNotNull();
@@ -105,85 +105,34 @@ class SessionServiceTest {
         assertThat(result.getIpAddress()).isEqualTo("192.168.1.100");
         assertThat(result.getLocation()).isEqualTo("Seoul, South Korea");
         assertThat(result.getIsRevoked()).isFalse();
+        assertThat(result.getClientId()).isEqualTo("test-client");
+        assertThat(result.getAuthorizationId()).isEqualTo("test-authorization-id");
+        assertThat(result.getPkceFlow()).isTrue();  // SAS는 PKCE 강제
 
         verify(sessionRepository).save(any(UserSession.class));
     }
 
     @Test
-    @DisplayName("세션 검증 - 유효한 세션")
-    void validateSession_validSession() {
+    @DisplayName("SAS 세션 생성 - 요청 컨텍스트 없이도 안전하게 생성")
+    void createSasSession_nullRequest_createsSessionSafely() {
         // given
-        String refreshToken = "valid-token";
-        UserSession validSession = UserSession.builder()
-                .refreshTokenHash(sessionService.hashToken(refreshToken))
-                .user(testUser)
-                .isRevoked(false)
-                .expiresAt(LocalDateTime.now().plusDays(7))
-                .build();
-
-        when(sessionRepository.findByRefreshTokenHash(any())).thenReturn(Optional.of(validSession));
+        when(deviceDetector.parse(null)).thenReturn(
+                DeviceDetector.DeviceInfo.builder()
+                        .deviceType("Unknown")
+                        .deviceName("Unknown Device")
+                        .build()
+        );
+        when(sessionRepository.countActiveSessionsByUser(any(), any())).thenReturn(0L);
+        when(sessionRepository.save(any(UserSession.class))).thenAnswer(i -> i.getArgument(0));
 
         // when
-        boolean result = sessionService.validateSession(refreshToken);
+        UserSession result = sessionService.createSasSession(testUser, "token", "jti",
+                "client", "auth-id", null, null);
 
         // then
-        assertThat(result).isTrue();
-    }
-
-    @Test
-    @DisplayName("세션 검증 - 무효화된 세션")
-    void validateSession_revokedSession() {
-        // given
-        String refreshToken = "revoked-token";
-        UserSession revokedSession = UserSession.builder()
-                .refreshTokenHash(sessionService.hashToken(refreshToken))
-                .user(testUser)
-                .isRevoked(true)
-                .expiresAt(LocalDateTime.now().plusDays(7))
-                .build();
-
-        when(sessionRepository.findByRefreshTokenHash(any())).thenReturn(Optional.of(revokedSession));
-
-        // when
-        boolean result = sessionService.validateSession(refreshToken);
-
-        // then
-        assertThat(result).isFalse();
-    }
-
-    @Test
-    @DisplayName("세션 검증 - 만료된 세션")
-    void validateSession_expiredSession() {
-        // given
-        String refreshToken = "expired-token";
-        UserSession expiredSession = UserSession.builder()
-                .refreshTokenHash(sessionService.hashToken(refreshToken))
-                .user(testUser)
-                .isRevoked(false)
-                .expiresAt(LocalDateTime.now().minusDays(1))
-                .build();
-
-        when(sessionRepository.findByRefreshTokenHash(any())).thenReturn(Optional.of(expiredSession));
-
-        // when
-        boolean result = sessionService.validateSession(refreshToken);
-
-        // then
-        assertThat(result).isFalse();
-    }
-
-    @Test
-    @DisplayName("세션 검증 - 존재하지 않는 세션")
-    void validateSession_notFound() {
-        // given
-        String refreshToken = "nonexistent-token";
-        when(sessionRepository.findByRefreshTokenHash(any())).thenReturn(Optional.empty());
-
-        // when
-        boolean result = sessionService.validateSession(refreshToken);
-
-        // then
-        assertThat(result).isFalse();
+        assertThat(result).isNotNull();
+        assertThat(result.getIpAddress()).isEqualTo("unknown");
+        assertThat(result.getDeviceType()).isEqualTo("Unknown");
     }
 
     @Test
@@ -215,7 +164,7 @@ class SessionServiceTest {
                 .createdAt(LocalDateTime.now().minusDays(3))
                 .build();
 
-        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(userRepository.findByEmail("test@example.com")).thenReturn(java.util.Optional.of(testUser));
         when(sessionRepository.findActiveSessionsByUser(any(), any())).thenReturn(List.of(session1, session2));
 
         // when
@@ -229,11 +178,8 @@ class SessionServiceTest {
 
     @Test
     @DisplayName("동시 세션 제한 - 최대 5개 초과 시 가장 오래된 세션 무효화")
-    void createSession_sessionLimitExceeded_revokesOldest() {
+    void createSasSession_sessionLimitExceeded_revokesOldest() {
         // given
-        String refreshToken = "new-token";
-        String accessTokenJti = "new-jti";
-
         UserSession oldestSession = UserSession.builder()
                 .refreshTokenHash("oldest-hash")
                 .user(testUser)
@@ -253,14 +199,15 @@ class SessionServiceTest {
         );
         when(sessionRepository.countActiveSessionsByUser(any(), any())).thenReturn(5L);
         when(sessionRepository.findOldestActiveSessionsByUser(any(), any())).thenReturn(List.of(oldestSession));
-        when(jwtUtil.getJwtExpiration()).thenReturn(900000L);
         when(sessionRepository.save(any(UserSession.class))).thenAnswer(i -> i.getArgument(0));
 
         // when
-        sessionService.createSession(testUser, refreshToken, accessTokenJti, mockRequest);
+        sessionService.createSasSession(testUser, "new-token", "new-jti",
+                "client", "auth-id", null, mockRequest);
 
         // then
         assertThat(oldestSession.getIsRevoked()).isTrue();
+        // SAS access token TTL(900초)로 블랙리스트 등록
         verify(blacklistService).blacklistJti("old-jti", 900L);
         verify(sessionRepository, times(2)).save(any(UserSession.class));
     }
@@ -282,11 +229,9 @@ class SessionServiceTest {
     }
 
     @Test
-    @DisplayName("세션 생성 - scope 포함")
-    void createSession_withScopes_savesScopes() {
+    @DisplayName("SAS 세션 생성 - scope 포함")
+    void createSasSession_withScopes_savesScopes() {
         // given
-        String refreshToken = "test-refresh-token";
-        String accessTokenJti = "test-jti";
         Set<String> scopes = Set.of("profile", "email", "account:manage");
 
         when(ipUtil.getClientIp(mockRequest)).thenReturn("192.168.1.100");
@@ -297,29 +242,22 @@ class SessionServiceTest {
                         .deviceName("Chrome on Windows")
                         .build()
         );
-        when(geoIpService.resolveLocation("192.168.1.100")).thenReturn("Seoul, South Korea");
         when(sessionRepository.countActiveSessionsByUser(any(), any())).thenReturn(0L);
         when(sessionRepository.save(any(UserSession.class))).thenAnswer(i -> i.getArgument(0));
 
         // when
-        UserSession result = sessionService.createSession(testUser, refreshToken, accessTokenJti,
-                mockRequest, false, scopes);
+        UserSession result = sessionService.createSasSession(testUser, "token", "jti",
+                "client", "auth-id", scopes, mockRequest);
 
         // then
         assertThat(result).isNotNull();
         assertThat(result.getScopes().split(" ")).containsExactlyInAnyOrder("account:manage", "email", "profile");
-        assertThat(result.getPkceFlow()).isFalse();
-
-        verify(sessionRepository).save(any(UserSession.class));
     }
 
     @Test
-    @DisplayName("세션 생성 - scope가 null이면 scopes 필드가 null")
-    void createSession_withNullScopes_savesNullScopes() {
+    @DisplayName("SAS 세션 생성 - scope가 null이면 scopes 필드가 null")
+    void createSasSession_withNullScopes_savesNullScopes() {
         // given
-        String refreshToken = "test-refresh-token";
-        String accessTokenJti = "test-jti";
-
         when(ipUtil.getClientIp(mockRequest)).thenReturn("192.168.1.100");
         when(ipUtil.normalizeIp("192.168.1.100")).thenReturn("192.168.1.100");
         when(deviceDetector.parse(any())).thenReturn(
@@ -328,13 +266,12 @@ class SessionServiceTest {
                         .deviceName("Chrome on Windows")
                         .build()
         );
-        when(geoIpService.resolveLocation("192.168.1.100")).thenReturn("Seoul, South Korea");
         when(sessionRepository.countActiveSessionsByUser(any(), any())).thenReturn(0L);
         when(sessionRepository.save(any(UserSession.class))).thenAnswer(i -> i.getArgument(0));
 
         // when
-        UserSession result = sessionService.createSession(testUser, refreshToken, accessTokenJti,
-                mockRequest, false, null);
+        UserSession result = sessionService.createSasSession(testUser, "token", "jti",
+                "client", "auth-id", null, mockRequest);
 
         // then
         assertThat(result).isNotNull();

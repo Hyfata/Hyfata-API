@@ -10,19 +10,9 @@ public interface AuthService {
     void register(RegisterRequest request);
 
     /**
-     * 로그인 (세션 생성 포함)
-     */
-    AuthResponse login(AuthRequest request, HttpServletRequest httpRequest);
-
-    /**
-     * 2FA 검증 (세션 생성 포함)
+     * 2FA 검증 (레거시 REST 로그인 경로 전용)
      */
     AuthResponse verifyTwoFactor(TwoFactorRequest request, HttpServletRequest httpRequest);
-
-    /**
-     * 토큰 갱신 (세션 검증 및 갱신)
-     */
-    AuthResponse refreshToken(RefreshTokenRequest request, HttpServletRequest httpRequest);
 
     /**
      * 로그아웃 (현재 세션 무효화)

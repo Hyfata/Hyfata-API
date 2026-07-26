@@ -8,33 +8,42 @@ import kr.hyfata.rest.api.auth.service.AuthService;
 import kr.hyfata.rest.api.auth.service.ClientService;
 import kr.hyfata.rest.api.common.service.EmailService;
 import kr.hyfata.rest.api.auth.service.SessionService;
-import kr.hyfata.rest.api.common.util.JwtUtil;
 import kr.hyfata.rest.api.common.util.TokenGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Set;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AuthServiceImpl implements AuthService {
 
+    /** SAS TokenSettings의 access token TTL과 동일 (15분) */
+    private static final long ACCESS_TOKEN_TTL_SECONDS = 900;
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtUtil jwtUtil;
+    private final JwtEncoder jwtEncoder;
     private final TokenGenerator tokenGenerator;
     private final EmailService emailService;
     private final ClientService clientService;
     private final SessionService sessionService;
 
-    @Value("${jwt.expiration:900000}")
-    private long jwtExpiration;
+    @Value("${auth.issuer:}")
+    private String issuer;
 
     @Value("${auth.2fa.expiration-minutes:10}")
     private int twoFactorExpirationMinutes;
@@ -44,8 +53,9 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void register(RegisterRequest request) {
-        // 클라이언트 검증
-        if (clientService.validateClient(request.getClientId()).isEmpty()) {
+        // 클라이언트 검증 (clientId가 지정된 경우에만 — OAuth 가입 페이지는 클라이언트 무관)
+        if (StringUtils.hasText(request.getClientId())
+                && !clientService.validateClient(request.getClientId())) {
             throw new BadCredentialsException("유효하지 않거나 비활성화된 클라이언트입니다.");
         }
 
@@ -77,49 +87,12 @@ public class AuthServiceImpl implements AuthService {
         log.info("User registered: {} (client: {})", user.getEmail(), request.getClientId());
     }
 
-    @Override
-    @Transactional
-    public AuthResponse login(AuthRequest request, HttpServletRequest httpRequest) {
-        // 클라이언트 검증
-        if (clientService.validateClient(request.getClientId()).isEmpty()) {
-            throw new BadCredentialsException("Invalid or disabled client");
-        }
-
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new BadCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다."));
-
-        if (!user.isEnabled()) {
-            throw new BadCredentialsException("비활성화된 계정입니다.");
-        }
-
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new BadCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다.");
-        }
-
-        // 2FA 활성화 시
-        if (user.getTwoFactorEnabled()) {
-            String twoFactorCode = tokenGenerator.generate2FACode();
-            user.setTwoFactorCode(twoFactorCode);
-            user.setTwoFactorCodeExpiredAt(LocalDateTime.now().plusMinutes(twoFactorExpirationMinutes));
-            userRepository.save(user);
-
-            emailService.sendTwoFactorEmail(user.getEmail(), twoFactorCode, request.getClientId());
-
-            return AuthResponse.twoFactorRequired("이메일로 전송된 인증 코드를 입력해 주세요.");
-        }
-
-        // 토큰 생성 (JTI 포함)
-        JwtUtil.TokenResult tokenResult = jwtUtil.generateAccessTokenWithJti(user);
-        String refreshToken = jwtUtil.generateRefreshToken(user);
-
-        // 세션 생성
-        sessionService.createSession(user, refreshToken, tokenResult.jti(), httpRequest);
-
-        log.info("User logged in: {} (client: {})", user.getEmail(), request.getClientId());
-
-        return AuthResponse.success(tokenResult.token(), refreshToken, jwtExpiration);
-    }
-
+    /**
+     * 2FA 검증 (레거시 REST 로그인 경로 전용)
+     * <p>
+     * Access Token은 SAS와 동일한 JwtEncoder(RS256)로 발급해 Resource Server에서 검증 가능하다.
+     * Refresh Token은 세션 추적용 opaque 문자열이며, 갱신은 SAS /oauth/token 흐름만 지원한다.
+     */
     @Override
     @Transactional
     public AuthResponse verifyTwoFactor(TwoFactorRequest request, HttpServletRequest httpRequest) {
@@ -139,47 +112,28 @@ public class AuthServiceImpl implements AuthService {
         user.setTwoFactorCodeExpiredAt(null);
         userRepository.save(user);
 
-        // 토큰 생성 (JTI 포함)
-        JwtUtil.TokenResult tokenResult = jwtUtil.generateAccessTokenWithJti(user);
-        String refreshToken = jwtUtil.generateRefreshToken(user);
+        // Access Token 발급 (SAS 토큰과 동일한 클레임 구성)
+        Set<String> scopes = Set.of("profile", "email");
+        String jti = UUID.randomUUID().toString();
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(issuer)
+                .subject(user.getEmail())
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(ACCESS_TOKEN_TTL_SECONDS))
+                .id(jti)
+                .claim("email", user.getEmail())
+                .claim("scope", String.join(" ", scopes))
+                .build();
+        String accessToken = jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
 
-        // 세션 생성
-        sessionService.createSession(user, refreshToken, tokenResult.jti(), httpRequest);
+        // 세션 생성 (refresh token은 세션 추적용 opaque 문자열)
+        String refreshToken = tokenGenerator.generatePasswordResetToken();
+        sessionService.createSasSession(user, refreshToken, jti, null, null, scopes, httpRequest);
 
         log.info("2FA verified for: {}", user.getEmail());
 
-        return AuthResponse.success(tokenResult.token(), refreshToken, jwtExpiration);
-    }
-
-    @Override
-    @Transactional
-    public AuthResponse refreshToken(RefreshTokenRequest request, HttpServletRequest httpRequest) {
-        // JWT 서명 검증
-        if (!jwtUtil.validateToken(request.getRefreshToken())) {
-            throw new BadCredentialsException("유효하지 않은 리프레시 토큰입니다.");
-        }
-
-        // 세션 검증 (DB)
-        if (!sessionService.validateSession(request.getRefreshToken())) {
-            throw new BadCredentialsException("세션이 유효하지 않거나 해지되었습니다.");
-        }
-
-        String email = jwtUtil.extractEmail(request.getRefreshToken());
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BadCredentialsException("사용자를 찾을 수 없습니다."));
-
-        // 새 토큰 생성 (토큰 로테이션)
-        JwtUtil.TokenResult newTokenResult = jwtUtil.generateAccessTokenWithJti(user);
-        String newRefreshToken = jwtUtil.generateRefreshToken(user);
-
-        // 기존 세션 무효화 + 새 세션 생성
-        String oldSessionHash = sessionService.hashToken(request.getRefreshToken());
-        sessionService.revokeSession(email, oldSessionHash, null);
-        sessionService.createSession(user, newRefreshToken, newTokenResult.jti(), httpRequest);
-
-        log.debug("Token refreshed for: {}", email);
-
-        return AuthResponse.success(newTokenResult.token(), newRefreshToken, jwtExpiration);
+        return AuthResponse.success(accessToken, refreshToken, ACCESS_TOKEN_TTL_SECONDS * 1000);
     }
 
     @Override
@@ -199,8 +153,8 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void requestPasswordReset(String email, String clientId) {
-        // 클라이언트 검증
-        if (clientService.validateClient(clientId).isEmpty()) {
+        // 클라이언트 검증 (clientId가 지정된 경우에만)
+        if (StringUtils.hasText(clientId) && !clientService.validateClient(clientId)) {
             throw new BadCredentialsException("유효하지 않거나 비활성화된 클라이언트입니다.");
         }
 

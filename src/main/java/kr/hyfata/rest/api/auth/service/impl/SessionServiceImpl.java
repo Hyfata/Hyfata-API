@@ -11,13 +11,15 @@ import kr.hyfata.rest.api.auth.service.TokenBlacklistService;
 import kr.hyfata.rest.api.common.util.DeviceDetector;
 import kr.hyfata.rest.api.common.util.GeoIpService;
 import kr.hyfata.rest.api.common.util.IpUtil;
-import kr.hyfata.rest.api.common.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
 import org.springframework.stereotype.Service;
@@ -34,13 +36,25 @@ import java.util.stream.Collectors;
 @Slf4j
 public class SessionServiceImpl implements SessionService {
 
+    /** SAS TokenSettings의 access token TTL과 동일 (15분) — JTI 블랙리스트 TTL로 사용 */
+    private static final long SAS_ACCESS_TOKEN_TTL_SECONDS = 900;
+
+    /** SAS TokenSettings의 refresh token TTL과 동일 (14일) */
+    private static final long SAS_REFRESH_TOKEN_TTL_SECONDS = 14 * 24 * 60 * 60;
+
     private final UserSessionRepository sessionRepository;
     private final UserRepository userRepository;
     private final TokenBlacklistService blacklistService;
     private final IpUtil ipUtil;
     private final DeviceDetector deviceDetector;
     private final GeoIpService geoIpService;
-    private final JwtUtil jwtUtil;
+
+    /**
+     * SAS OAuth2AuthorizationService (SessionBridgingAuthorizationService 데코레이터).
+     * 순환 의존(데코레이터 → SessionService → authorizationService) 방지를 위해
+     * ObjectProvider로 지연 해결한다.
+     */
+    private final ObjectProvider<OAuth2AuthorizationService> authorizationServiceProvider;
 
     @Autowired(required = false)
     private FindByIndexNameSessionRepository<? extends Session> indexedSessionRepository;
@@ -48,38 +62,25 @@ public class SessionServiceImpl implements SessionService {
     @Value("${session.max-per-user:5}")
     private int maxSessionsPerUser;
 
-    @Value("${jwt.refresh-expiration:1209600000}")
-    private long refreshTokenExpiration;
-
     @Override
     @Transactional
-    public UserSession createSession(User user, String refreshToken, String accessTokenJti,
-                                      HttpServletRequest request) {
-        return createSession(user, refreshToken, accessTokenJti, request, false);
-    }
-
-    @Override
-    @Transactional
-    public UserSession createSession(User user, String refreshToken, String accessTokenJti,
-                                      HttpServletRequest request, boolean isPkceFlow) {
-        return createSession(user, refreshToken, accessTokenJti, request, isPkceFlow, null);
-    }
-
-    @Override
-    @Transactional
-    public UserSession createSession(User user, String refreshToken, String accessTokenJti,
-                                      HttpServletRequest request, boolean isPkceFlow, Set<String> scopes) {
+    public UserSession createSasSession(User user, String refreshToken, String accessTokenJti,
+                                        String clientId, String authorizationId, Set<String> scopes,
+                                        HttpServletRequest request) {
         // 동시 세션 수 확인 및 제한
         enforceSessionLimit(user);
 
         String tokenHash = hashToken(refreshToken);
-        String ipAddress = ipUtil.normalizeIp(ipUtil.getClientIp(request));
-        String userAgent = request.getHeader("User-Agent");
+        String ipAddress = "unknown";
+        String userAgent = null;
+        if (request != null) {
+            ipAddress = ipUtil.normalizeIp(ipUtil.getClientIp(request));
+            userAgent = request.getHeader("User-Agent");
+        }
         DeviceDetector.DeviceInfo deviceInfo = deviceDetector.parse(userAgent);
         String location = geoIpService.resolveLocation(ipAddress);
 
-        LocalDateTime expiresAt = LocalDateTime.now()
-                .plusSeconds(refreshTokenExpiration / 1000);
+        LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(SAS_REFRESH_TOKEN_TTL_SECONDS);
 
         String scopesStr = (scopes != null && !scopes.isEmpty()) ? String.join(" ", scopes) : null;
 
@@ -87,6 +88,8 @@ public class SessionServiceImpl implements SessionService {
                 .refreshTokenHash(tokenHash)
                 .user(user)
                 .accessTokenJti(accessTokenJti)
+                .clientId(clientId)
+                .authorizationId(authorizationId)
                 .deviceType(deviceInfo.getDeviceType())
                 .deviceName(deviceInfo.getDeviceName())
                 .ipAddress(ipAddress)
@@ -94,13 +97,59 @@ public class SessionServiceImpl implements SessionService {
                 .userAgent(userAgent)
                 .expiresAt(expiresAt)
                 .isRevoked(false)
-                .pkceFlow(isPkceFlow)  // PKCE 기반 Public Client 여부
+                .pkceFlow(true)  // SAS는 모든 클라이언트에 PKCE 강제
                 .scopes(scopesStr)
                 .lastActiveAt(LocalDateTime.now())
                 .createdAt(LocalDateTime.now())
                 .build();
 
         return sessionRepository.save(session);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UserSession> findByAuthorizationId(String authorizationId) {
+        return sessionRepository.findByAuthorizationId(authorizationId);
+    }
+
+    @Override
+    @Transactional
+    public void revokeSessionEntity(UserSession session) {
+        if (Boolean.TRUE.equals(session.getIsRevoked())) {
+            return;  // 이미 무효화된 세션 (SessionService ↔ SAS 데코레이터 양방향 호출 시 중복 방지)
+        }
+
+        session.revoke();
+        sessionRepository.save(session);
+
+        // 해당 세션의 Access Token 블랙리스트 등록 (SAS access token TTL 기준)
+        if (session.getAccessTokenJti() != null) {
+            blacklistService.blacklistJti(session.getAccessTokenJti(), SAS_ACCESS_TOKEN_TTL_SECONDS);
+        }
+
+        log.info("Session revoked via SAS bridging: {}", session.getRefreshTokenHash());
+    }
+
+    /**
+     * 세션에 연결된 SAS OAuth2Authorization을 제거해 refresh token까지 무효화한다.
+     * 데코레이터의 remove()가 revokeSessionEntity()를 다시 호출하지만, 이미 무효화된 세션은 건너뛰므로 안전하다.
+     */
+    private void removeSasAuthorization(UserSession session) {
+        if (session.getAuthorizationId() == null) {
+            return;  // 레거시(JWT) 세션은 SAS authorization이 없음
+        }
+        try {
+            OAuth2AuthorizationService authorizationService = authorizationServiceProvider.getIfAvailable();
+            if (authorizationService == null) {
+                return;
+            }
+            OAuth2Authorization authorization = authorizationService.findById(session.getAuthorizationId());
+            if (authorization != null) {
+                authorizationService.remove(authorization);
+            }
+        } catch (Exception e) {
+            log.error("Failed to remove SAS authorization for session: {}", e.getMessage());
+        }
     }
 
     /**
@@ -122,7 +171,7 @@ public class SessionServiceImpl implements SessionService {
                 if (oldest.getAccessTokenJti() != null) {
                     blacklistService.blacklistJti(
                             oldest.getAccessTokenJti(),
-                            jwtUtil.getJwtExpiration() / 1000
+                            SAS_ACCESS_TOKEN_TTL_SECONDS
                     );
                 }
 
@@ -186,9 +235,12 @@ public class SessionServiceImpl implements SessionService {
         if (session.getAccessTokenJti() != null) {
             blacklistService.blacklistJti(
                     session.getAccessTokenJti(),
-                    jwtUtil.getJwtExpiration() / 1000
+                    SAS_ACCESS_TOKEN_TTL_SECONDS
             );
         }
+
+        // SAS authorization도 함께 제거해 refresh token까지 무효화
+        removeSasAuthorization(session);
 
         log.info("Session revoked: {} for user: {}", sessionId, userEmail);
     }
@@ -207,13 +259,18 @@ public class SessionServiceImpl implements SessionService {
             if (session.getAccessTokenJti() != null) {
                 blacklistService.blacklistJti(
                         session.getAccessTokenJti(),
-                        jwtUtil.getJwtExpiration() / 1000
+                        SAS_ACCESS_TOKEN_TTL_SECONDS
                 );
             }
         }
 
         int revokedCount = sessionRepository.revokeAllByUser(user);
         log.info("All sessions revoked for user: {}. Count: {}", userEmail, revokedCount);
+
+        // SAS authorization도 함께 제거해 refresh token까지 무효화
+        for (UserSession session : activeSessions) {
+            removeSasAuthorization(session);
+        }
 
         // OAuth 서버사이드 세션(Redis)도 무효화
         revokeAllOAuthSessions(userEmail);
@@ -252,48 +309,19 @@ public class SessionServiceImpl implements SessionService {
                     session.getAccessTokenJti() != null) {
                 blacklistService.blacklistJti(
                         session.getAccessTokenJti(),
-                        jwtUtil.getJwtExpiration() / 1000
+                        SAS_ACCESS_TOKEN_TTL_SECONDS
                 );
             }
         }
 
         int revokedCount = sessionRepository.revokeOthersByUser(user, currentHash);
         log.info("Other sessions revoked for user: {}. Count: {}", userEmail, revokedCount);
-    }
 
-    @Override
-    @Transactional(readOnly = true)
-    public boolean validateSession(String refreshToken) {
-        String tokenHash = hashToken(refreshToken);
-        Optional<UserSession> sessionOpt = sessionRepository.findByRefreshTokenHash(tokenHash);
-
-        if (sessionOpt.isEmpty()) {
-            log.debug("Session not found for token hash");
-            return false;
-        }
-
-        UserSession session = sessionOpt.get();
-        boolean valid = session.isValid();
-
-        if (!valid) {
-            log.debug("Session is not valid: revoked={}, expires={}",
-                    session.getIsRevoked(), session.getExpiresAt());
-        }
-
-        return valid;
-    }
-
-    @Override
-    @Transactional
-    public void updateSessionActivity(String refreshToken, String newAccessTokenJti) {
-        String tokenHash = hashToken(refreshToken);
-        Optional<UserSession> sessionOpt = sessionRepository.findByRefreshTokenHash(tokenHash);
-
-        if (sessionOpt.isPresent()) {
-            UserSession session = sessionOpt.get();
-            session.updateActivity();
-            session.setAccessTokenJti(newAccessTokenJti);
-            sessionRepository.save(session);
+        // 현재 세션 제외 SAS authorization도 함께 제거해 refresh token까지 무효화
+        for (UserSession session : activeSessions) {
+            if (!session.getRefreshTokenHash().equals(currentHash)) {
+                removeSasAuthorization(session);
+            }
         }
     }
 

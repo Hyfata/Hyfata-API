@@ -14,7 +14,8 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_user_sessions_user_id", columnList = "user_id"),
                 @Index(name = "idx_user_sessions_last_active_at", columnList = "last_active_at"),
                 @Index(name = "idx_user_sessions_expires_at", columnList = "expires_at"),
-                @Index(name = "idx_user_sessions_is_revoked", columnList = "is_revoked")
+                @Index(name = "idx_user_sessions_is_revoked", columnList = "is_revoked"),
+                @Index(name = "idx_user_sessions_authorization_id", columnList = "authorization_id")
         })
 @Data
 @NoArgsConstructor
@@ -57,7 +58,13 @@ public class UserSession {
 
     @Column(name = "pkce_flow", nullable = false)
     @Builder.Default
-    private Boolean pkceFlow = false;  // PKCE 기반 Public Client 여부
+    private Boolean pkceFlow = false;  // 레거시 구분값 — SAS는 모든 클라이언트에 PKCE를 강제하므로 SAS 세션은 항상 true로 기록
+
+    @Column(name = "client_id", length = 100)
+    private String clientId;  // SAS RegisteredClient의 client_id
+
+    @Column(name = "authorization_id", length = 255)
+    private String authorizationId;  // SAS OAuth2Authorization ID (세션 브리징용)
 
     @Column(length = 500)
     private String scopes;  // 세션에 발급된 scope 목록

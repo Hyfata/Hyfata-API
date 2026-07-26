@@ -14,16 +14,12 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class ClientResponse {
-    private Long id;
     private String clientId;
-    private String clientSecret;
+    private String clientSecret;  // 등록 응답 시에만 평문 1회 포함
     private String name;
     private String description;
     private String frontendUrl;
     private List<String> redirectUris;
-    private Boolean enabled;
-    private Integer maxTokensPerUser;
-    private String defaultScopes;
     private String allowedScopes;
     private ClientType clientType;
     private Long ownerId;

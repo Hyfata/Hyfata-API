@@ -30,9 +30,7 @@ public class FirstPartyClientProperties {
         private String description;
         private String frontendUrl;
         private String redirectUris;
-        private String defaultScopes;
         private String allowedScopes;
-        private Integer maxTokensPerUser = 5;
         private Boolean enabled = true;
     }
 }

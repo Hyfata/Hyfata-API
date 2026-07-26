@@ -93,7 +93,7 @@ public class AccountServiceImpl implements AccountService {
     @Override
     public String requestAccountRestore(String email, String clientId) {
         // 클라이언트 검증
-        if (clientService.validateClient(clientId).isEmpty()) {
+        if (!clientService.validateClient(clientId)) {
             throw new IllegalArgumentException("유효하지 않거나 비활성화된 클라이언트입니다");
         }
 

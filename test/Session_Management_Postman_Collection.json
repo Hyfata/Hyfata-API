@@ -1,22 +1,15 @@
 {
   "info": {
-    "name": "Hyfata Session Management API",
-    "_postman_id": "session-management-collection",
-    "description": "Session management API tests for Hyfata REST API",
+    "_postman_id": "session-management-testing",
+    "name": "Session Management Testing",
+    "description": "세션 관리 API 테스트. 토큰은 OAuth 2.0 + PKCE 흐름(SAS)으로 발급받습니다 (OAuth2_PKCE_Complete_Testing 컬렉션 참고). 세션 API는 sessions:manage scope가 필요합니다.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:8080"
-    }
-  ],
   "item": [
     {
       "name": "Auth",
       "item": [
         {
-          "name": "Register",
           "request": {
             "method": "POST",
             "header": [
@@ -25,190 +18,122 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Password123!\",\n    \"username\": \"testuser\"\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/api/auth/register",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "register"]
-            }
-          }
-        },
-        {
-          "name": "Login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"username\": \"{{username}}\"\n}"
+            },
+            "description": "📝 회원가입\n\n성공 후 이메일 검증이 필요합니다 (DB에서 email_verified=true 설정 또는 인증 메일)."
+          },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    const response = pm.response.json();",
-                  "    pm.environment.set(\"accessToken\", response.accessToken);",
-                  "    pm.environment.set(\"refreshToken\", response.refreshToken);",
-                  "    console.log(\"Tokens saved to environment\");",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "pm.test('✅ Status code is 201', function() {",
+                  "  pm.response.to.have.status(201);",
+                  "});"
+                ]
               }
             }
           ],
+          "name": "1. Register"
+        },
+        {
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": []
+            },
+            "description": "🔑 OAuth 토큰 획득 (안내)\n\n레거시 /api/auth/login은 삭제되었습니다. 다음 절차로 토큰을 발급받으세요:\n\n1. OAuth2_PKCE_Complete_Testing 컬렉션의 Section 0~3 실행\n   (클라이언트 등록 → PKCE authorize → 로그인 → token 교환)\n2. 발급된 access_token / refresh_token을 이 컬렉션 변수에 복사\n\n⚠️ 세션 API는 sessions:manage scope가 필요합니다. authorize 요청 시 scope=profile email sessions:manage 를 포함하고, 해당 scope가 클라이언트의 allowedScopes에 있어야 합니다."
+          },
+          "response": [],
+          "name": "2. [Guide] Get OAuth Tokens"
+        },
+        {
           "request": {
             "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
-                "value": "application/json"
+                "value": "application/x-www-form-urlencoded"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Password123!\"\n}"
-            },
             "url": {
-              "raw": "{{baseUrl}}/api/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "login"]
-            }
-          }
-        },
-        {
-          "name": "Login (iPhone)",
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "refresh_token"
+                },
+                {
+                  "key": "refresh_token",
+                  "value": "{{refreshToken}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{client_secret}}"
+                }
+              ]
+            },
+            "description": "🔄 토큰 갱신 (SAS)\n\nconfidential 클라이언트는 Basic 인증(Authorization 탭)을 사용합니다. public 클라이언트는 auth 대신 본문에 client_id를 추가하세요.\n\n토큰 로테이션: 새 Refresh Token이 발급되고 기존 것은 즉시 무효화됩니다.\n무효화된 Refresh Token 재사용 시 세션 전체가 무효화됩니다 (reuse detection).\nexpires_in은 초 단위(900 = 15분)입니다."
+          },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    const response = pm.response.json();",
-                  "    pm.environment.set(\"iphoneAccessToken\", response.accessToken);",
-                  "    pm.environment.set(\"iphoneRefreshToken\", response.refreshToken);",
-                  "    console.log(\"iPhone tokens saved\");",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "pm.test('✅ Status code is 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', response.access_token);",
+                  "pm.collectionVariables.set('refreshToken', response.refresh_token);",
+                  "console.log('✅ Tokens refreshed (rotated)');"
+                ]
               }
             }
           ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "User-Agent",
-                "value": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Mobile/15E148 Safari/604.1"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Password123!\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "login"]
-            }
-          }
+          "name": "3. Refresh Token"
         },
         {
-          "name": "Login (Android)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    const response = pm.response.json();",
-                  "    pm.environment.set(\"androidAccessToken\", response.accessToken);",
-                  "    pm.environment.set(\"androidRefreshToken\", response.refreshToken);",
-                  "    console.log(\"Android tokens saved\");",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "User-Agent",
-                "value": "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.210 Mobile Safari/537.36"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Password123!\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "login"]
-            }
-          }
-        },
-        {
-          "name": "Refresh Token",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    const response = pm.response.json();",
-                  "    pm.environment.set(\"accessToken\", response.accessToken);",
-                  "    pm.environment.set(\"refreshToken\", response.refreshToken);",
-                  "    console.log(\"New tokens saved\");",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/refresh",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "refresh"]
-            }
-          }
-        },
-        {
-          "name": "Logout",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    pm.environment.unset(\"accessToken\");",
-                  "    pm.environment.unset(\"refreshToken\");",
-                  "    console.log(\"Tokens cleared from environment\");",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
           "request": {
             "method": "POST",
             "header": [
@@ -221,16 +146,42 @@
                 "value": "Bearer {{accessToken}}"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}"
-            },
             "url": {
               "raw": "{{baseUrl}}/api/auth/logout",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "logout"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"logoutAll\": false\n}"
+            },
+            "description": "🚪 로그아웃\n\n세션 무효화 + Access Token JTI 블랙리스트 + SAS authorization(Refresh Token) 제거."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('✅ Status code is 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('✅ Logout message', function() {",
+                  "  const response = pm.response.json();",
+                  "  pm.expect(response).to.have.property('message');",
+                  "});"
+                ]
+              }
             }
-          }
+          ],
+          "name": "4. Logout"
         }
       ]
     },
@@ -238,75 +189,58 @@
       "name": "Sessions",
       "item": [
         {
-          "name": "Get Active Sessions",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Response has sessions array\", function () {",
-                  "    const response = pm.response.json();",
-                  "    pm.expect(response).to.have.property('sessions');",
-                  "    pm.expect(response.sessions).to.be.an('array');",
-                  "});",
-                  "",
-                  "pm.test(\"Current session is marked\", function () {",
-                  "    const response = pm.response.json();",
-                  "    const currentSession = response.sessions.find(s => s.isCurrent === true);",
-                  "    pm.expect(currentSession).to.not.be.undefined;",
-                  "});",
-                  "",
-                  "// Save first non-current session ID for revocation test",
-                  "const response = pm.response.json();",
-                  "const otherSession = response.sessions.find(s => s.isCurrent === false);",
-                  "if (otherSession) {",
-                  "    pm.environment.set(\"otherSessionId\", otherSession.sessionId);",
-                  "    console.log(\"Other session ID saved: \" + otherSession.sessionId);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
           "request": {
             "method": "GET",
             "header": [
               {
                 "key": "Authorization",
                 "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Refresh-Token",
+                "value": "{{refreshToken}}"
               }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/sessions",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "sessions"]
-            }
-          }
-        },
-        {
-          "name": "Revoke Specific Session",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sessions"
+              ]
+            },
+            "description": "📋 활성 세션 목록 조회\n\nX-Refresh-Token 헤더를 본낼 경우 현재 세션이 isCurrent=true로 표시됩니다."
+          },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
+                  "pm.test('✅ Status code is 200', function() {",
+                  "  pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Session revoked successfully\", function () {",
-                  "    const response = pm.response.json();",
-                  "    pm.expect(response.success).to.be.true;",
-                  "});"
-                ],
-                "type": "text/javascript"
+                  "pm.test('✅ Sessions list received', function() {",
+                  "  const response = pm.response.json();",
+                  "  pm.expect(response).to.have.property('sessions');",
+                  "  pm.expect(response).to.have.property('totalSessions');",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "console.log('Active Sessions: ' + response.totalSessions);",
+                  "if (response.sessions && response.sessions.length > 0) {",
+                  "  pm.collectionVariables.set('otherSessionId', response.sessions[0].sessionId);",
+                  "}"
+                ]
               }
             }
           ],
+          "name": "1. Get Active Sessions"
+        },
+        {
           "request": {
             "method": "DELETE",
             "header": [
@@ -317,33 +251,86 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/sessions/{{otherSessionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "sessions", "{{otherSessionId}}"]
-            }
-          }
-        },
-        {
-          "name": "Revoke All Other Sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sessions",
+                "{{otherSessionId}}"
+              ]
+            },
+            "description": "🔒 특정 세션 무효화 (원격 로그아웃)\n\n세션 무효화 + JTI 블랙리스트 + SAS authorization(Refresh Token) 제거."
+          },
+          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
+                  "pm.test('✅ Status code is 200', function() {",
+                  "  pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"All other sessions revoked\", function () {",
-                  "    const response = pm.response.json();",
-                  "    pm.expect(response.success).to.be.true;",
+                  "pm.test('✅ Session revoked', function() {",
+                  "  const response = pm.response.json();",
+                  "  pm.expect(response.message).to.equal('Session revoked successfully');",
                   "});"
-                ],
-                "type": "text/javascript"
+                ]
               }
             }
           ],
+          "name": "2. Revoke Session"
+        },
+        {
           "request": {
-            "method": "DELETE",
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Refresh-Token",
+                "value": "{{refreshToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/revoke-others",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sessions",
+                "revoke-others"
+              ]
+            },
+            "description": "🔒 현재 세션 외 모든 세션 무효화\n\nX-Refresh-Token 헤더로 현재 세션을 식별합니다 (필수)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('✅ Status code is 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('✅ Others revoked', function() {",
+                  "  const response = pm.response.json();",
+                  "  pm.expect(response.message).to.equal('Other sessions revoked successfully');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "3. Revoke Other Sessions"
+        },
+        {
+          "request": {
+            "method": "POST",
             "header": [
               {
                 "key": "Authorization",
@@ -351,509 +338,86 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/sessions/others",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "sessions", "others"]
+              "raw": "{{baseUrl}}/api/sessions/revoke-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sessions",
+                "revoke-all"
+              ]
+            },
+            "description": "🔒 모든 세션 무효화 (전체 로그아웃)\n\n서버사이드 로그인 세션(Redis)도 함께 무효화됩니다."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('✅ Status code is 200', function() {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('✅ All revoked', function() {",
+                  "  const response = pm.response.json();",
+                  "  pm.expect(response.message).to.equal('All sessions revoked successfully');",
+                  "});"
+                ]
+              }
             }
-          }
+          ],
+          "name": "4. Revoke All Sessions"
         }
       ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
     },
     {
-      "name": "Test Scenarios",
-      "item": [
-        {
-          "name": "1. Basic Flow",
-          "item": [
-            {
-              "name": "1.1 Register User",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"email\": \"flow-test@example.com\",\n    \"password\": \"Password123!\",\n    \"username\": \"flowtest\"\n}"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/auth/register",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "auth", "register"]
-                }
-              }
-            },
-            {
-              "name": "1.2 Login",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "if (pm.response.code === 200) {",
-                      "    const response = pm.response.json();",
-                      "    pm.environment.set(\"accessToken\", response.accessToken);",
-                      "    pm.environment.set(\"refreshToken\", response.refreshToken);",
-                      "}"
-                    ],
-                    "type": "text/javascript"
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"email\": \"flow-test@example.com\",\n    \"password\": \"Password123!\"\n}"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/auth/login",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "auth", "login"]
-                }
-              }
-            },
-            {
-              "name": "1.3 Get Sessions",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Authorization",
-                    "value": "Bearer {{accessToken}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{baseUrl}}/api/sessions",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "sessions"]
-                }
-              }
-            },
-            {
-              "name": "1.4 Logout",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "Authorization",
-                    "value": "Bearer {{accessToken}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/auth/logout",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "auth", "logout"]
-                }
-              }
-            }
-          ]
-        },
-        {
-          "name": "2. Token Blacklist Test",
-          "item": [
-            {
-              "name": "2.1 Login",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "if (pm.response.code === 200) {",
-                      "    const response = pm.response.json();",
-                      "    pm.environment.set(\"blacklistTestAccessToken\", response.accessToken);",
-                      "    pm.environment.set(\"blacklistTestRefreshToken\", response.refreshToken);",
-                      "}"
-                    ],
-                    "type": "text/javascript"
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Password123!\"\n}"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/auth/login",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "auth", "login"]
-                }
-              }
-            },
-            {
-              "name": "2.2 Logout (Invalidate Session)",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "Authorization",
-                    "value": "Bearer {{blacklistTestAccessToken}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"refreshToken\": \"{{blacklistTestRefreshToken}}\"\n}"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/auth/logout",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "auth", "logout"]
-                }
-              }
-            },
-            {
-              "name": "2.3 Access Sensitive API (Should Fail)",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "pm.test(\"Status code is 401\", function () {",
-                      "    pm.response.to.have.status(401);",
-                      "});",
-                      "",
-                      "pm.test(\"Token revoked error\", function () {",
-                      "    const response = pm.response.json();",
-                      "    pm.expect(response.error).to.include('revoked');",
-                      "});"
-                    ],
-                    "type": "text/javascript"
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Authorization",
-                    "value": "Bearer {{blacklistTestAccessToken}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{baseUrl}}/api/sessions",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "sessions"]
-                }
-              }
-            }
-          ]
-        },
-        {
-          "name": "3. Session Limit Test",
-          "item": [
-            {
-              "name": "3.1 Login Device 1 (Chrome Windows)",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "if (pm.response.code === 200) {",
-                      "    const response = pm.response.json();",
-                      "    pm.environment.set(\"device1Token\", response.accessToken);",
-                      "}"
-                    ],
-                    "type": "text/javascript"
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "User-Agent",
-                    "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Password123!\"\n}"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/auth/login",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "auth", "login"]
-                }
-              }
-            },
-            {
-              "name": "3.2 Login Device 2 (Safari macOS)",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "if (pm.response.code === 200) {",
-                      "    const response = pm.response.json();",
-                      "    pm.environment.set(\"device2Token\", response.accessToken);",
-                      "}"
-                    ],
-                    "type": "text/javascript"
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "User-Agent",
-                    "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Password123!\"\n}"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/auth/login",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "auth", "login"]
-                }
-              }
-            },
-            {
-              "name": "3.3 Login Device 3 (Firefox Linux)",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "if (pm.response.code === 200) {",
-                      "    const response = pm.response.json();",
-                      "    pm.environment.set(\"device3Token\", response.accessToken);",
-                      "}"
-                    ],
-                    "type": "text/javascript"
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "User-Agent",
-                    "value": "Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Password123!\"\n}"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/auth/login",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "auth", "login"]
-                }
-              }
-            },
-            {
-              "name": "3.4 Login Device 4 (iPhone)",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "if (pm.response.code === 200) {",
-                      "    const response = pm.response.json();",
-                      "    pm.environment.set(\"device4Token\", response.accessToken);",
-                      "}"
-                    ],
-                    "type": "text/javascript"
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "User-Agent",
-                    "value": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Mobile/15E148 Safari/604.1"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Password123!\"\n}"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/auth/login",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "auth", "login"]
-                }
-              }
-            },
-            {
-              "name": "3.5 Login Device 5 (Android)",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "if (pm.response.code === 200) {",
-                      "    const response = pm.response.json();",
-                      "    pm.environment.set(\"device5Token\", response.accessToken);",
-                      "}"
-                    ],
-                    "type": "text/javascript"
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "User-Agent",
-                    "value": "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.210 Mobile Safari/537.36"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Password123!\"\n}"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/auth/login",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "auth", "login"]
-                }
-              }
-            },
-            {
-              "name": "3.6 Login Device 6 (iPad) - Should Evict Oldest",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "if (pm.response.code === 200) {",
-                      "    const response = pm.response.json();",
-                      "    pm.environment.set(\"device6Token\", response.accessToken);",
-                      "    pm.environment.set(\"accessToken\", response.accessToken);",
-                      "    pm.environment.set(\"refreshToken\", response.refreshToken);",
-                      "}"
-                    ],
-                    "type": "text/javascript"
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "User-Agent",
-                    "value": "Mozilla/5.0 (iPad; CPU OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Mobile/15E148 Safari/604.1"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Password123!\"\n}"
-                },
-                "url": {
-                  "raw": "{{baseUrl}}/api/auth/login",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "auth", "login"]
-                }
-              }
-            },
-            {
-              "name": "3.7 Check Sessions (Should Be Max 5)",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "pm.test(\"Status code is 200\", function () {",
-                      "    pm.response.to.have.status(200);",
-                      "});",
-                      "",
-                      "pm.test(\"Max 5 sessions\", function () {",
-                      "    const response = pm.response.json();",
-                      "    pm.expect(response.sessions.length).to.be.at.most(5);",
-                      "});",
-                      "",
-                      "pm.test(\"Oldest session was evicted\", function () {",
-                      "    const response = pm.response.json();",
-                      "    // Device 1 (Chrome Windows) should be evicted",
-                      "    const chromeWindowsSession = response.sessions.find(s => ",
-                      "        s.deviceName && s.deviceName.includes('Chrome') && s.deviceName.includes('Windows')",
-                      "    );",
-                      "    // If all 6 logins happened, Device 1 should be gone",
-                      "    console.log('Active sessions: ' + response.sessions.length);",
-                      "});"
-                    ],
-                    "type": "text/javascript"
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Authorization",
-                    "value": "Bearer {{accessToken}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{baseUrl}}/api/sessions",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "sessions"]
-                }
-              }
-            }
-          ]
-        }
-      ]
+      "key": "email",
+      "value": "test@example.com",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "Password123!",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "testuser",
+      "type": "string"
+    },
+    {
+      "key": "client_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "client_secret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otherSessionId",
+      "value": "",
+      "type": "string"
     }
   ]
 }

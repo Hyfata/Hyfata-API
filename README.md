@@ -2,17 +2,18 @@
 
 **Production-Ready OAuth 2.0 Authorization Server with Scope-based Access Control**
 
-Spring Boot 3.4.4 기반의 OAuth 2.0 인증/인가 서버. Google OAuth, Discord OAuth와 동일한 보안 표준을 따를며, **Scope 기반 세분화된 접근 제어**를 지원합니다.
+Spring Boot 3.4.4 + Spring Authorization Server 기반의 OAuth 2.0 인증/인가 서버. Google OAuth, Discord OAuth와 동일한 보안 표준을 따를며, **Scope 기반 세분화된 접근 제어**를 지원합니다.
 
 ---
 
 ## 주요 기능
 
-### OAuth 2.0 Authorization Code Flow + PKCE
-- RFC 7636 PKCE 지원 (모바일/데스크톱 앱 보안)
-- CSRF 방지 (State 파라미터)
+### OAuth 2.0 Authorization Code Flow + PKCE (Spring Authorization Server)
+- RFC 7636 PKCE **필수** (모든 클라이언트, S256)
+- RS256 서명 JWT (공개키: `/oauth/jwks`)
 - 일회용 Authorization Code (10분 유효)
-- 토큰 로테이션 (Refresh Token 갱신 시 새 토큰 발급)
+- Refresh Token 로테이션 + 재사용 감지 (무효 토큰 재사용 시 세션 전체 무효화)
+- Third-Party 클라이언트 consent 화면
 
 ### 세션 관리
 - 다중 기기 로그인 지원 (최대 5개 세션)
@@ -22,13 +23,13 @@ Spring Boot 3.4.4 기반의 OAuth 2.0 인증/인가 서버. Google OAuth, Discor
 
 ### Scope 기반 접근 제어
 - OAuth 2.0 Scope 표준 준수 (RFC 6749)
-- 클라이언트별 `defaultScopes` / `allowedScopes` 설정
+- 클라이언트별 `allowedScopes` 설정 (SAS `oauth2_registered_client.scopes`)
 - 민감 API(`account:password`, `2fa:manage` 등)에 `@RequireScope` 적용
 - First-Party(공식) 클라이언트만 민감 Scope 사용 가능, 설정 파일로 관리
 - Third-Party 클라이언트는 API 등록 시 `profile email`로 제한되거나 관리자가 제한된 Scope만 부여 가능
 
 ### 완전한 인증 시스템
-- JWT 기반 토큰 (Access: 15분, Refresh: 14일)
+- JWT 기반 토큰 (RS256, Access: 15분, Refresh: 14일 opaque)
 - BCrypt 비밀번호 암호화
 - 2FA (이메일 기반)
 - 이메일 검증
@@ -37,7 +38,6 @@ Spring Boot 3.4.4 기반의 OAuth 2.0 인증/인가 서버. Google OAuth, Discor
 ### 프로덕션 준비
 - PostgreSQL 데이터베이스
 - Redis (토큰 블랙리스트 + 서버사이드 세션)
-- 만료 코드 자동 정리 스케줄러
 - 상세 로깅
 
 ---
@@ -61,8 +61,12 @@ DB_PASSWORD=your_password
 # R2DBC (optional, 현재 미사용 시 주석 처리 가능)
 # R2DBC_URL=r2dbc:postgresql://localhost:5432/hyfata_db
 
-# JWT (required)
-JWT_SECRET=minimum-32-characters-strong-secret-key
+# SAS Issuer (optional, 기본값 https://api.hyfata.kr)
+# AUTH_ISSUER=https://api.hyfata.kr
+
+# JWT RSA 키 (optional — 미설정 시 시작 시 임시 키페어 생성, 개발용)
+# JWT_PRIVATE_KEY_PATH=file:./keys/private.pem
+# JWT_PUBLIC_KEY_PATH=file:./keys/public.pem
 
 # Redis (required)
 REDIS_HOST=localhost
@@ -114,10 +118,13 @@ OFFICIAL_WEB_REDIRECT_URIS=https://hyfata.kr/oauth/callback
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|-----------|------|
-| GET | `/oauth/authorize` | Authorization 요청 (로그인 페이지) |
-| POST | `/oauth/login` | 사용자 로그인 처리 |
-| POST | `/oauth/token` | Token 발급 (`authorization_code`, `refresh_token`) |
-| POST | `/oauth/logout` | OAuth 로그아웃 (인증 필요) |
+| GET | `/oauth/authorize` | Authorization 요청 (SAS, PKCE 필수) |
+| POST | `/oauth/token` | Token 발급/갱신 (SAS, `authorization_code`, `refresh_token`) |
+| POST | `/oauth/revoke` | 토큰 취소 (SAS, RFC 7009) |
+| POST | `/oauth/introspect` | 토큰 검사 (SAS, RFC 7662) |
+| GET | `/oauth/jwks` | RSA 공개키 JWK Set (SAS) |
+| GET/POST | `/oauth/login` | 로그인 페이지/처리 (formLogin) |
+| POST | `/oauth/logout` | OAuth 로그아웃 (인증 필요, 커스텀) |
 
 ### 계정 관리
 
@@ -153,12 +160,15 @@ OFFICIAL_WEB_REDIRECT_URIS=https://hyfata.kr/oauth/callback
 
 > **참고**: First-Party(공식) 클라이언트는 `/api/clients/register`로 등록할 수 없습니다. `application.properties` 또는 환경 변수로 정의되며, 애플리케이션 시작 시 자동으로 시드됩니다.
 
-### 레거시 API (Deprecated)
+### 기타 인증 API
 
 | 메서드 | 엔드포인트 | 상태 |
 |--------|-----------|------|
-| POST | `/api/auth/register` | 사용 가능 (회원가입) |
-| POST | `/api/auth/login` | **Deprecated** - OAuth 사용 권장 |
+| POST | `/api/auth/register` | 회원가입 |
+| POST | `/api/auth/verify-2fa` | 2FA 코드 검증 (레거시 REST 경로) |
+| POST | `/api/auth/logout` | 로그아웃 |
+
+> **제거됨**: `POST /api/auth/login`, `POST /api/auth/refresh` (OAuth 2.0 흐름으로 대체)
 
 ---
 
@@ -186,7 +196,7 @@ OFFICIAL_WEB_REDIRECT_URIS=https://hyfata.kr/oauth/callback
            &code=...
            &code_verifier=...             └─ PKCE 검증
            &client_id=...                 └─ 세션 생성
-           &client_secret=...
+           (confidential은 Basic 인증 헤더)
                                           └─ Access + Refresh Token 발급
      │
      └─ 6. 토큰 사용
@@ -203,12 +213,15 @@ OFFICIAL_WEB_REDIRECT_URIS=https://hyfata.kr/oauth/callback
 - `OAUTH2_PKCE_TESTING.md` - 테스트 가이드
 
 ### 테스트 실행
+
+> **주의**: 기본 셸 Java가 25 이상이면 Gradle 8.13이 실패합니다. Java 21로 실행하세요 (`JAVA_HOME=/root/.sdkman/candidates/java/21.0.11-graal`).
+
 ```bash
 # 모든 테스트 실행
 ./gradlew test
 
 # 특정 테스트 클래스 실행
-./gradlew test --tests "*JwtUtilTest*"
+./gradlew test --tests "*ScopeAuthorizationAspectTest*"
 
 # 테스트 결과 보기
 # build/reports/tests/test/index.html
@@ -220,9 +233,9 @@ OFFICIAL_WEB_REDIRECT_URIS=https://hyfata.kr/oauth/callback
 
 | 기능 | 설명 |
 |------|------|
-| **PKCE** | Authorization Code 탈취 방지 (RFC 7636) |
+| **PKCE 필수** | Authorization Code 탈취 방지 (RFC 7636, 모든 클라이언트 S256) |
 | **State** | CSRF 공격 방지 |
-| **토큰 로테이션** | Refresh 시 새 토큰 발급, 기존 무효화 |
+| **토큰 로테이션** | Refresh 시 새 토큰 발급, 기존 무효화 + 재사용 감지 |
 | **Scope 기반 접근 제어** | 민감 API에 `@RequireScope` 적용 |
 | **JTI 블랙리스트** | 로그아웃 시 Access Token 즉시 무효화 |
 | **세션 제한** | 사용자당 최대 5개 동시 세션 |
@@ -237,10 +250,10 @@ OFFICIAL_WEB_REDIRECT_URIS=https://hyfata.kr/oauth/callback
 │  Hyfata REST API                        │
 ├─────────────────────────────────────────┤
 │  ┌─────────────────────────────────┐    │
-│  │  OAuth 2.0 + PKCE Layer         │    │
+│  │  OAuth 2.0 Layer (SAS)          │    │
 │  │  - Authorization Code Flow      │    │
-│  │  - Scope Validation             │    │
-│  │  - PKCE Verification            │    │
+│  │  - PKCE Verification (필수)      │    │
+│  │  - RS256 JWT / JWKS             │    │
 │  └─────────────────────────────────┘    │
 │                  ↓                      │
 │  ┌─────────────────────────────────┐    │
@@ -273,7 +286,8 @@ OFFICIAL_WEB_REDIRECT_URIS=https://hyfata.kr/oauth/callback
 |--------|------|
 | `users` | 사용자 정보 및 인증 |
 | `clients` | OAuth 클라이언트 정보 (scope 포함) |
-| `authorization_codes` | Authorization Code 저장 (scope 포함) |
+| `oauth2_authorization` | SAS authorization (code/token/scope) |
+| `oauth2_authorization_consent` | SAS consent 동의 내역 |
 | `user_sessions` | 사용자 세션 정보 (scope 포함) |
 | `login_history` | 로그인 이력 |
 
@@ -298,7 +312,7 @@ OFFICIAL_WEB_REDIRECT_URIS=https://hyfata.kr/oauth/callback
 | Java | 17 |
 | PostgreSQL | 12+ |
 | Redis | 6+ |
-| JJWT | 0.12.3 |
+| Spring Authorization Server | 1.4.x |
 
 ---
 
@@ -308,6 +322,7 @@ OFFICIAL_WEB_REDIRECT_URIS=https://hyfata.kr/oauth/callback
 - [x] 세션 관리 (다중 기기)
 - [x] 토큰 로테이션
 - [x] OAuth 2.0 Scopes 세분화 및 접근 제어
+- [x] Spring Authorization Server 마이그레이션 (RS256/JWKS)
 - [ ] Rate Limiting
 - [ ] WebAuthn 지원
 

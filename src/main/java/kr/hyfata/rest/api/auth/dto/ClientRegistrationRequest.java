@@ -16,8 +16,6 @@ public class ClientRegistrationRequest {
     private String description;
     private String frontendUrl;
     private List<String> redirectUris;
-    private Integer maxTokensPerUser;
     private Long ownerId;
-    private String defaultScopes;   // 예: "profile email"
-    private String allowedScopes;   // 예: "profile email profile:write account:password"
+    private String allowedScopes;   // 예: "profile email profile:write account:password" (관리자만 지정 가능)
 }

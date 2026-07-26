@@ -2,10 +2,14 @@
 
 이 가이드는 Postman을 사용하여 세션 관리 API를 테스트하는 방법을 설명합니다.
 
+> **SAS 마이그레이션 이후**: 레거시 `POST /api/auth/login`, `POST /api/auth/refresh`는 삭제되었습니다.
+> 토큰 발급/갱신은 OAuth 2.0 + PKCE 흐름(Spring Authorization Server)을 사용합니다.
+> `Session_Management_Postman_Collection.json`도 현재 스펙 기준으로 갱신되었습니다.
+
 ## Prerequisites
 
 ### 1. Redis 서버 실행
-세션 블랙리스트 기능을 위해 Redis가 필요합니다.
+세션 블랙리스트와 OAuth 로그인 세션 저장을 위해 Redis가 필요합니다.
 
 ```bash
 # Docker를 사용하는 경우
@@ -26,18 +30,33 @@ REDIS_PORT=6379
 ./gradlew bootRun
 ```
 
+### 4. 토큰 발급 (OAuth 2.0 + PKCE)
+
+세션 API를 테스트하려면 먼저 Access Token이 필요합니다.
+`OAuth2_PKCE_Complete_Testing` 컬렉션(또는 `OAUTH2_PKCE_TESTING.md` 가이드)의 Section 0~3을 실행하여
+토큰을 발급받으세요. 요약:
+
+1. OAuth 클라이언트 등록 (`POST /api/clients/register`) — `allowedScopes`에 `sessions:manage` 포함 필요
+2. PKCE authorize → 로그인 → `/oauth/token` 교환
+3. 발급된 `access_token` / `refresh_token`을 컬렉션 변수에 저장
+
+> 세션 API는 **`sessions:manage` scope**가 필요합니다. authorize 요청 시
+> `scope=profile email sessions:manage`를 포함하세요.
+
 ---
 
 ## Postman Environment Setup
 
 ### 변수 설정
-Postman Environment에 다음 변수를 추가하세요:
+Postman Environment(또는 Collection Variables)에 다음 변수를 추가하세요:
 
 | Variable | Initial Value | Description |
 |----------|---------------|-------------|
 | `baseUrl` | `http://localhost:8080` | API 서버 주소 |
-| `accessToken` | (빈 값) | 로그인 후 자동 설정 |
-| `refreshToken` | (빈 값) | 로그인 후 자동 설정 |
+| `client_id` | (OAuth 클라이언트 ID) | 토큰 갱신 시 Basic 인증용 |
+| `client_secret` | (OAuth 클라이언트 시크릿) | 토큰 갱신 시 Basic 인증용 (public 클라이언트는 불필요) |
+| `accessToken` | (빈 값) | OAuth 토큰 발급 후 설정 |
+| `refreshToken` | (빈 값) | OAuth 토큰 발급 후 설정 |
 
 ---
 
@@ -58,40 +77,45 @@ Postman Environment에 다음 변수를 추가하세요:
 **Response (201 Created):**
 ```json
 {
-    "success": true,
-    "message": "User registered successfully"
+    "message": "회원가입이 완료되었습니다. 이메일을 확인하여 계정을 인증해 주세요."
 }
 ```
 
 ---
 
-### 2. 로그인
+### 2. 토큰 갱신 (SAS)
 
-**POST** `{{baseUrl}}/api/auth/login`
+**POST** `{{baseUrl}}/oauth/token`
 
-```json
-{
-    "email": "test@example.com",
-    "password": "Password123!"
-}
+**Authorization:** Basic Auth (username=`{{client_id}}`, password=`{{client_secret}}`)
+
+**Body** (application/x-www-form-urlencoded):
+```
+grant_type=refresh_token
+refresh_token={{refreshToken}}
 ```
 
 **Response (200 OK):**
 ```json
 {
-    "success": true,
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expiresIn": 900000
+    "access_token": "eyJhbGciOiJSUzI1NiJ9...",
+    "refresh_token": "opaque...",
+    "token_type": "Bearer",
+    "expires_in": 900,
+    "scope": "profile email sessions:manage"
 }
 ```
+
+- `expires_in`은 **초 단위(900 = 15분)**입니다.
+- **토큰 로테이션**: 새 Refresh Token이 발급되고 기존 것은 즉시 무효화됩니다.
+- **Reuse detection**: 무효화된 Refresh Token을 재사용하면 세션 전체가 무효화됩니다.
 
 **Post-request Script (토큰 자동 저장):**
 ```javascript
 if (pm.response.code === 200) {
     const response = pm.response.json();
-    pm.environment.set("accessToken", response.accessToken);
-    pm.environment.set("refreshToken", response.refreshToken);
+    pm.collectionVariables.set("accessToken", response.access_token);
+    pm.collectionVariables.set("refreshToken", response.refresh_token);
 }
 ```
 
@@ -106,20 +130,25 @@ if (pm.response.code === 200) {
 **Headers:**
 ```
 Authorization: Bearer {{accessToken}}
+X-Refresh-Token: {{refreshToken}}
 ```
+
+`X-Refresh-Token` 헤더를 본낼 경우 해당 세션이 `isCurrent: true`로 표시됩니다.
 
 **Response (200 OK):**
 ```json
 {
+    "totalSessions": 2,
     "sessions": [
         {
-            "sessionId": "abc123def456...",
+            "sessionId": "abc123def456...(sha256 해시)",
             "deviceType": "Desktop",
             "deviceName": "Chrome on Windows",
             "ipAddress": "192.168.1.100",
             "location": "Seoul, South Korea",
             "lastActiveAt": "2024-01-15T10:30:00",
             "createdAt": "2024-01-15T09:00:00",
+            "expiresAt": "2024-01-29T09:00:00",
             "isCurrent": true
         },
         {
@@ -130,11 +159,10 @@ Authorization: Bearer {{accessToken}}
             "location": "Seoul, South Korea",
             "lastActiveAt": "2024-01-15T08:00:00",
             "createdAt": "2024-01-14T15:00:00",
+            "expiresAt": "2024-01-28T15:00:00",
             "isCurrent": false
         }
-    ],
-    "totalCount": 2,
-    "maxAllowed": 5
+    ]
 }
 ```
 
@@ -143,6 +171,7 @@ Authorization: Bearer {{accessToken}}
 ### 4. 특정 세션 무효화 (원격 로그아웃)
 
 다른 기기의 세션을 원격으로 종료합니다.
+세션 무효화 + Access Token JTI 블랙리스트 + SAS authorization(Refresh Token) 제거가 함께 수행됩니다.
 
 **DELETE** `{{baseUrl}}/api/sessions/{sessionId}`
 
@@ -157,16 +186,7 @@ Authorization: Bearer {{accessToken}}
 **Response (200 OK):**
 ```json
 {
-    "success": true,
     "message": "Session revoked successfully"
-}
-```
-
-**Response (404 Not Found):**
-```json
-{
-    "success": false,
-    "message": "Session not found"
 }
 ```
 
@@ -176,25 +196,46 @@ Authorization: Bearer {{accessToken}}
 
 현재 사용 중인 세션을 제외한 모든 세션을 종료합니다.
 
-**DELETE** `{{baseUrl}}/api/sessions/others`
+**POST** `{{baseUrl}}/api/sessions/revoke-others`
+
+**Headers:**
+```
+Authorization: Bearer {{accessToken}}
+X-Refresh-Token: {{refreshToken}}
+```
+
+`X-Refresh-Token` 헤더(필수)로 현재 세션을 식별합니다.
+
+**Response (200 OK):**
+```json
+{
+    "message": "Other sessions revoked successfully"
+}
+```
+
+---
+
+### 6. 모든 세션 무효화 (전체 로그아웃)
+
+**POST** `{{baseUrl}}/api/sessions/revoke-all`
 
 **Headers:**
 ```
 Authorization: Bearer {{accessToken}}
 ```
 
+모든 세션 + 서버사이드 로그인 세션(Redis)도 함께 무효화됩니다.
+
 **Response (200 OK):**
 ```json
 {
-    "success": true,
-    "message": "All other sessions revoked successfully",
-    "revokedCount": 3
+    "message": "All sessions revoked successfully"
 }
 ```
 
 ---
 
-### 6. 로그아웃
+### 7. 로그아웃
 
 **POST** `{{baseUrl}}/api/auth/logout`
 
@@ -206,48 +247,20 @@ Authorization: Bearer {{accessToken}}
 **Request Body:**
 ```json
 {
-    "refreshToken": "{{refreshToken}}"
+    "refreshToken": "{{refreshToken}}",
+    "logoutAll": false
 }
 ```
 
 **Response (200 OK):**
 ```json
 {
-    "success": true,
-    "message": "Logged out successfully"
+    "message": "로그아웃되었습니다."
 }
 ```
 
----
-
-### 7. 토큰 갱신
-
-**POST** `{{baseUrl}}/api/auth/refresh`
-
-```json
-{
-    "refreshToken": "{{refreshToken}}"
-}
-```
-
-**Response (200 OK):**
-```json
-{
-    "success": true,
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expiresIn": 900000
-}
-```
-
-**Post-request Script:**
-```javascript
-if (pm.response.code === 200) {
-    const response = pm.response.json();
-    pm.environment.set("accessToken", response.accessToken);
-    pm.environment.set("refreshToken", response.refreshToken);
-}
-```
+> `POST /oauth/logout`도 사용할 수 있습니다 (동일하게 세션 + JTI 블랙리스트 + SAS authorization 제거,
+> 추가로 서버사이드 로그인 세션 무효화).
 
 ---
 
@@ -255,15 +268,15 @@ if (pm.response.code === 200) {
 
 ### Scenario 1: 기본 세션 관리 흐름
 
-1. **회원가입** - 새 계정 생성
-2. **로그인** - Access/Refresh 토큰 획득
+1. **회원가입** - 새 계정 생성 + 이메일 검증
+2. **OAuth 토큰 발급** - PKCE 흐름으로 Access/Refresh 토큰 획득
 3. **세션 목록 조회** - 현재 세션 확인
 4. **로그아웃** - 세션 종료
 
 ### Scenario 2: 다중 기기 로그인 테스트
 
-1. **Device 1에서 로그인** (Chrome)
-2. **Device 2에서 로그인** (Postman에서 User-Agent 변경)
+1. **Device 1에서 로그인** (Chrome) - OAuth 흐름 1회
+2. **Device 2에서 로그인** - OAuth 흐름을 다른 User-Agent로 1회 더
    - Headers에 추가: `User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)`
 3. **세션 목록 조회** - 2개 세션 확인
 4. **특정 세션 무효화** - Device 1 세션 종료
@@ -271,24 +284,25 @@ if (pm.response.code === 200) {
 
 ### Scenario 3: 동시 세션 제한 테스트 (최대 5개)
 
-1. 5개의 서로 다른 User-Agent로 로그인
-2. 6번째 로그인 시도
+1. 5개의 서로 다른 User-Agent로 로그인 (OAuth 흐름 5회)
+2. 6번째 로그인
 3. 가장 오래된 세션이 자동으로 무효화되는지 확인
 4. 세션 목록에서 최대 5개만 있는지 확인
 
 ### Scenario 4: 토큰 블랙리스트 테스트
 
-1. **로그인**
+1. **OAuth 토큰 발급**
 2. **로그아웃** (세션 무효화)
 3. **민감한 API 호출** (`/api/sessions`)
 4. **결과 확인**: `401 Unauthorized` + `"Token has been revoked"`
 
 ### Scenario 5: 토큰 갱신 흐름
 
-1. **로그인** - 토큰 획득
+1. **OAuth 토큰 발급**
 2. **15분 대기** (또는 만료된 토큰 사용)
-3. **Refresh 토큰으로 갱신**
+3. **`/oauth/token` (refresh_token grant)으로 갱신**
 4. **새 토큰으로 API 호출**
+5. (참고) 이전 Refresh Token으로 다시 갱신 시도 → 세션 전체 무효화 확인 (reuse detection)
 
 ---
 
@@ -336,35 +350,31 @@ Mozilla/5.0 (iPad; CPU OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, lik
 - 원인: 블랙리스트에 등록된 토큰으로 민감한 API 접근 시도
 - 해결: 다시 로그인하여 새 토큰 획득
 
+### 401 Unauthorized (만료/무효 토큰)
+- 원인: Access Token 만료(15분) 또는 서명 검증 실패
+- 해결: `/oauth/token` (refresh_token grant)으로 갱신
+
 ### 403 Forbidden
 ```json
 {
-    "error": "Cannot revoke other user's session"
+    "error": "Insufficient scope. Required one of: [sessions:manage]"
 }
 ```
-- 원인: 다른 사용자의 세션을 무효화하려는 시도
-- 해결: 본인 소유의 세션만 무효화 가능
-
-### 404 Not Found
-```json
-{
-    "success": false,
-    "message": "Session not found"
-}
-```
-- 원인: 존재하지 않거나 이미 무효화된 세션
-- 해결: 세션 목록을 다시 조회하여 유효한 세션 ID 확인
+- 원인: Access Token에 `sessions:manage` scope가 없음
+- 해결: authorize 시 해당 scope를 포함해 재인증 (클라이언트의 allowedScopes에도 있어야 함)
 
 ---
 
 ## Security Notes
 
-1. **Access Token**: 15분 만료, 일반 API는 JWT 서명만 검증
-2. **Refresh Token**: 2주 만료, DB에 해시 저장
-3. **민감한 API**: Redis 블랙리스트 추가 검증
+1. **Access Token**: RS256 JWT, 15분 만료. 일반 API는 서명/만료만 검증 (Resource Server 로컬 공개키 검증)
+2. **Refresh Token**: opaque 문자열, 14일 만료, DB에 해시 저장 (user_sessions)
+3. **토큰 로테이션 + Reuse detection**: 갱신 시 새 토큰 쌍 발급, 이전 Refresh Token 즉시 무효화.
+   무효 토큰 재사용 시 세션 전체 무효화
+4. **민감한 API**: Redis JTI 블랙리스트 추가 검증
    - `/api/sessions/**`
    - `/api/auth/change-password`
    - `/api/users/me`
    - `/api/payments/**`
-4. **동시 세션 제한**: 최대 5개, 초과 시 가장 오래된 세션 자동 무효화
-5. **토큰 회전**: Refresh 시 새로운 Access/Refresh 토큰 쌍 발급
+5. **동시 세션 제한**: 최대 5개, 초과 시 가장 오래된 세션 자동 무효화
+6. **세션-SAS 브리징**: 세션 무효화 시 SAS authorization(Refresh Token)도 함께 제거됨

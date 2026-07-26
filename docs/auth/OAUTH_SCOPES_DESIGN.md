@@ -119,24 +119,17 @@ account:manage → account:password 포함 (계정 관리자는 비밀번호 변
 
 ## 5. 데이터 모델 변경
 
-### 5.1 `clients` 테이블
+### 5.1 `oauth2_registered_client` + `client_metadata` 테이블
 
-```sql
--- 기존
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS default_scopes VARCHAR(500);
--- 예: "profile:read email" (클라이언트 등록 시 기본 scope)
+> **SAS 표준 전환 이후**: 커스텀 `clients` 테이블은 제거되었습니다.
+> 프로토콜 정보는 SAS 표준 `oauth2_registered_client` 테이블(scopes 컬럼 = allowedScopes)에 저장되고,
+> 정보성 메타데이터(owner, frontendUrl, description, clientType)는 `client_metadata` 테이블에 저장됩니다.
+> 두 테이블 모두 `db/sas-schema.sql`(sql.init) / JPA `ddl-auto=update`로 자동 생성됩니다.
 
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS allowed_scopes VARCHAR(500);
--- 예: "profile:read email profile:write account:password ..."
--- 이 클라이언트가 요청할 수 있는 최대 scope 범위
-```
+### 5.2 ~~`authorization_codes` 테이블~~ (삭제됨)
 
-### 5.2 `authorization_codes` 테이블
-
-```sql
--- Authorization Code 발급 시 사용자가 승인한 scope 저장
-ALTER TABLE authorization_codes ADD COLUMN IF NOT EXISTS scopes VARCHAR(500);
-```
+> **SAS 마이그레이션 이후**: 레거시 `authorization_codes` 테이블은 제거되었습니다 (`V8__drop_authorization_codes.sql`).
+> Authorization Code와 승인된 scope는 SAS의 `oauth2_authorization` 테이블(`authorized_scopes` 컬럼)에 저장됩니다.
 
 ### 5.3 `user_sessions` 테이블
 
@@ -149,29 +142,23 @@ ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS scopes VARCHAR(500);
 
 ## 6. 엔티티 변경
 
-### 6.1 `Client.java`
+### 6.1 `ClientMetadata.java` (구 `Client.java` 대체)
 
 ```java
-@Column(length = 500)
-private String defaultScopes;   // 클라이언트 기본 scope (등록 시 설정)
+@Column(length = 100) @Id
+private String clientId;         // SAS RegisteredClient.clientId와 동일
 
-@Column(length = 500)
-private String allowedScopes;   // 클라이언트가 요청할 수 있는 최대 scope
+@Enumerated(EnumType.STRING)
+private ClientType clientType;   // FIRST_PARTY / THIRD_PARTY (메타데이터)
 
-// 헬퍼 메서드
-public Set<String> getAllowedScopesSet() {
-    return allowedScopes != null 
-        ? Set.of(allowedScopes.split(" ")) 
-        : Set.of("profile:read", "email");
-}
+private String frontendUrl;
+private String description;
+@ManyToOne private User owner;
 ```
 
-### 6.2 `AuthorizationCode.java`
+### 6.2 ~~`AuthorizationCode.java`~~ (삭제됨)
 
-```java
-@Column(length = 500)
-private String scopes;
-```
+> SAS 마이그레이션으로 엔티티/리포지토리가 제거되었습니다. 승인 scope는 SAS `OAuth2Authorization`이 관리합니다.
 
 ### 6.3 `UserSession.java`
 
@@ -180,94 +167,98 @@ private String scopes;
 private String scopes;
 ```
 
+### 6.4 `JdbcRegisteredClientRepository` (SAS 표준) + `RegisteredClientFactory`
+
+저장소는 SAS 표준 `JdbcRegisteredClientRepository`를 사용합니다 (커스텀 어댑터 제거).
+등록 경로(`ClientServiceImpl`: third-party, `FirstPartyClientInitializer`: first-party)는
+`RegisteredClientFactory`로 동일 규칙의 RegisteredClient를 생성합니다:
+
+```java
+// auth/service/impl/RegisteredClientFactory.java
+.scopes(s -> s.addAll(scopes))  // 등록 요청의 allowedScopes
+// consent: third-party=true, first-party=false
+// requireProofKey(true), access 15분 / refresh 14일 / 로테이션
+```
+
 ---
 
-## 7. OAuth 흐름 변경
+## 7. OAuth 흐름 (SAS 기준)
 
-### 7.1 Step 1: `/oauth/authorize`
+> **SAS 마이그레이션 이후**: scope 파싱/검증/저장은 Spring Authorization Server가 수행합니다.
+> 커스텀 코드는 `RegisteredClientFactory`(등록 시 RegisteredClient 생성)와
+> `OAuth2TokenCustomizer`(JWT 클레임 추가)뿐입니다.
 
-**요청 파라미터에 `scope` 추가:**
+### 7.1 Step 1: `/oauth/authorize` (SAS)
+
+**요청 파라미터 `scope`:**
 
 ```http
 GET /oauth/authorize?client_id=client_001
   &redirect_uri=https://myapp.com/callback
   &response_type=code
   &state=abc123
-  &scope=profile:read+email
+  &code_challenge=...&code_challenge_method=S256
+  &scope=profile+email
 ```
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `scope` | X | 요청 scope (공백 또는 `+`로 구분). 미입력 시 클라이언트의 `defaultScopes` 사용 |
+| `scope` | X | 요청 scope (공백 또는 `+`로 구분). 미입력 시 클라이언트의 `allowedScopes` **전체**가 부여됨 |
 
-**클라이언트 검증 로직 추가:**
-1. `client_id`의 `allowedScopes` 확인
-2. 요청된 `scope`가 `allowedScopes`에 포함되는지 검증
-3. 포함되지 않는 scope가 있으면 `invalid_scope` 에러 반환
+**검증 동작 (SAS 내장):**
+1. 요청된 scope가 `RegisteredClient.scopes`(=`allowedScopes`)의 부분 집합인지 검증
+2. 초과 시 `invalid_scope` 에러로 응답
+3. THIRD_PARTY 클라이언트는 **consent 화면**이 표시되고, 사용자가 동의한 scope가 저장됨 (`oauth2_authorization_consent` 테이블 — 이후 동일 조합은 consent 생략)
+4. FIRST_PARTY 클라이언트는 `requireAuthorizationConsent(false)`로 consent 생략
 
-**Authorization Code 저장 시 `scopes` 필드에 사용자가 승인한 scope 저장:**
-- 현재는 로그인만 하면 자동 승인되므로, scope 요청 시에도 동일하게 처리
-- 향후 **Consent 화면** ("이 앱이 ~에 접근하려 합니다. 동의하시겠습니까?") 도입 시, 사용자가 체크한 scope만 저장
-
-### 7.2 Step 2: `/oauth/token`
+### 7.2 Step 2: `/oauth/token` (SAS)
 
 **Access Token 발급 시:**
-1. `AuthorizationCode.scopes`에서 scope 정보를 읽음
-2. JWT 클레임에 `"scope": "profile:read email"` 추가
-3. `UserSession` 생성 시 `scopes` 필드 저장 (토큰 갱신 시 동일 scope 유지)
-4. 응답의 `scope` 필드에 발급된 scope 반환 (이미 구현됨)
+1. SAS가 승인된 scope로 JWT(RS256)를 생성
+2. `OAuth2TokenCustomizer`가 `email`, `client_id`, 공백 구분 `scope` 클레임을 추가
+3. `SessionBridgingAuthorizationService`가 `UserSession` 생성 시 `scopes` 필드 저장
+4. 응답의 `scope` 필드에 발급된 scope 반환
 
 **Refresh Token 갱신 시:**
-1. 기존 세션의 `scopes`를 그대로 유지
+1. authorization에 저장된 scope가 그대로 유지됨 (갱신으로 scope를 늘리거나 줄일 수 없음)
 2. 새 Access Token에 동일한 scope 클레임 포함
-- 사용자는 refresh를 통해 scope를 **늘리거나 줄일 수 없음**
+3. 세션은 새 Refresh Token으로 교체 (로테이션)
 
 ---
 
-## 8. JWT 구조 변경
+## 8. JWT 구조 (SAS 기준)
 
-### 8.1 Access Token 클레임 (변경 후)
+### 8.1 Access Token 클레임 (현재)
 
 ```json
 {
+  "iss": "https://api.hyfata.kr",
   "sub": "user@example.com",
+  "email": "user@example.com",
+  "aud": "client_001",
   "jti": "a1b2c3d4...",
   "client_id": "client_001",
-  "scope": "profile:read email",
+  "scope": "profile email",
   "iat": 1714819200,
   "exp": 1714820100
 }
 ```
 
-### 8.2 `JwtUtil` 변경 포인트
+- 서명 알고리즘: **RS256** (RSA 2048, 공개키는 `GET /oauth/jwks`)
+- 유효 시간: **15분** (`expires_in` 응답은 초 단위 900)
+
+### 8.2 클레임 생성 지점
+
+`iss`, `sub`, `aud`, `jti`, `iat`, `exp`, `nbf`와 기본 `scope`는 SAS가 생성하고,
+`email`, `client_id`, 공백 구분 `scope`는 `OAuth2TokenCustomizer`가 추가합니다
+(`common/config/AuthorizationServerConfig.java`의 `jwtTokenCustomizer` 빈).
 
 ```java
-// 토큰 생성 시 scope 추가
-public TokenResult generateAccessTokenWithJti(User user, String clientId, Set<String> scopes) {
-    String jti = UUID.randomUUID().toString();
-    String scopeStr = String.join(" ", scopes);
-    
-    String token = Jwts.builder()
-        .subject(user.getEmail())
-        .claim("jti", jti)
-        .claim("client_id", clientId)
-        .claim("scope", scopeStr)
-        // ... 기존 클레임
-        .signWith(key, SignatureAlgorithm.HS512)
-        .compact();
-    
-    return new TokenResult(token, jti);
-}
-
-// 토큰에서 scope 추출
-public Set<String> extractScopes(String token) {
-    String scopeStr = extractClaim(token, claims -> claims.get("scope", String.class));
-    return scopeStr != null ? new HashSet<>(Arrays.asList(scopeStr.split(" "))) : Set.of();
-}
-
-// 토큰에서 client_id 추출
-public String extractClientId(String token) {
-    return extractClaim(token, claims -> claims.get("client_id", String.class));
+// AuthorizationServerConfig.java
+if (OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())) {
+    context.getClaims().claim("email", context.getPrincipal().getName());
+    context.getClaims().claim("client_id", context.getRegisteredClient().getClientId());
+    context.getClaims().claim("scope", String.join(" ", context.getAuthorizedScopes()));
 }
 ```
 
@@ -316,45 +307,39 @@ public class AuthController {
 }
 ```
 
-**Aspect/Interceptor 구현:**
+**Aspect 구현 (현재 — SecurityContext의 SCOPE_ authority 기반):**
+
+Resource Server가 JWT의 `scope` 클레임을 `SCOPE_` prefix `GrantedAuthority`로 변환해 두면
+(`SecurityConfig`의 `jwtAuthenticationConverter`), Aspect는 이를 읽어 검증합니다.
 
 ```java
 @Component
 @Aspect
 public class ScopeAuthorizationAspect {
 
-    @Autowired
-    private JwtUtil jwtUtil;
+    private static final String SCOPE_PREFIX = "SCOPE_";
 
     @Around("@annotation(requireScope)")
     public Object checkScope(ProceedingJoinPoint joinPoint, RequireScope requireScope) throws Throwable {
-        HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
-        String jwt = extractJwtFromRequest(request);
-        
-        Set<String> tokenScopes = jwtUtil.extractScopes(jwt);
-        Set<String> requiredScopes = Set.of(requireScope.value());
-        
-        // 포함 관계 체크 (profile:write 가 있으면 profile:read 도 암시적 허용)
-        boolean hasScope = requiredScopes.stream().anyMatch(req -> 
-            tokenScopes.contains(req) || hasImplicitScope(tokenScopes, req)
-        );
-        
-        if (!hasScope) {
-            throw new AccessDeniedException("Insufficient scope. Required: " + requiredScopes);
+        Set<String> tokenScopes = extractTokenScopes();  // SCOPE_ prefix 제거한 scope 집합
+        if (tokenScopes == null) {
+            throw new AccessDeniedException("JWT token is required");
         }
-        
-        return joinPoint.proceed();
+        // value(): OR 조건 / all(): AND 조건 + 암시적 포함 관계 체크
+        ...
     }
-    
+
     private boolean hasImplicitScope(Set<String> tokenScopes, String required) {
-        // profile:write → profile:read 암시적 포함
-        if (required.equals("profile:read") && tokenScopes.contains("profile:write")) return true;
+        // profile:write → profile 암시적 포함
+        if (required.equals("profile") && tokenScopes.contains("profile:write")) return true;
         // account:manage → account:password 암시적 포함
         if (required.equals("account:password") && tokenScopes.contains("account:manage")) return true;
         return false;
     }
 }
 ```
+
+실제 코드: `common/security/scope/ScopeAuthorizationAspect.java`
 
 ### 9.2 방법 2: Spring Security `@PreAuthorize` (대안)
 
@@ -383,23 +368,22 @@ app.first-party.clients[0].client-secret=${OFFICIAL_WEB_CLIENT_SECRET}
 app.first-party.clients[0].name=${OFFICIAL_WEB_CLIENT_NAME:Hyfata Official Web}
 app.first-party.clients[0].frontend-url=${OFFICIAL_WEB_FRONTEND_URL:https://hyfata.kr}
 app.first-party.clients[0].redirect-uris=${OFFICIAL_WEB_REDIRECT_URIS:https://hyfata.kr/oauth/callback}
-app.first-party.clients[0].default-scopes=${OFFICIAL_WEB_DEFAULT_SCOPES:profile email profile:write account:password account:manage 2fa:manage sessions:manage}
 app.first-party.clients[0].allowed-scopes=${OFFICIAL_WEB_ALLOWED_SCOPES:profile email profile:write account:password account:manage 2fa:manage sessions:manage}
 ```
 
 **타사(Third-Party) 클라이언트**는 `POST /api/clients/register` API를 통해 등록되며, `clientType`은 `THIRD_PARTY`로 강제 설정됩니다.
 
-```java
-// 타사 클라이언트 등록 예시
-Client thirdPartyClient = Client.builder()
-    .name("Third Party App")
-    .clientId("client_third_001")
-    // ...
-    .clientType(ClientType.THIRD_PARTY)
-    .defaultScopes("profile:read email")
-    .allowedScopes("profile:read email friends:read chat:read chat:write notifications:read")
-    .build();
+```json
+// 타사 클라이언트 등록 예시 (POST /api/clients/register, 관리자)
+{
+  "name": "Third Party App",
+  "frontendUrl": "https://third.example.com",
+  "redirectUris": ["https://third.example.com/callback"],
+  "allowedScopes": "profile email"
+}
 ```
+등록된 scope는 SAS `oauth2_registered_client.scopes`에 저장되고, `clientType` 메타데이터는
+`client_metadata` 테이블에 `THIRD_PARTY`로 기록됩니다.
 
 ### 10.2 클라이언트 scope 요청 제한
 
@@ -414,50 +398,18 @@ Client thirdPartyClient = Client.builder()
 
 ---
 
-## 11. Flutter 클라이언트 연동 가이드
+## 11. 클라이언트 연동 참고
 
-### 11.1 공식 앱의 Authorization 요청
-
-```dart
-// 공식 앱: 전체 scope 요청
-final scope = 'profile:read email profile:write account:password account:manage 2fa:manage sessions:manage';
-
-final authUrl = Uri.parse('https://api.hyfata.kr/oauth/authorize')
-  .replace(queryParameters: {
-    'client_id': 'client_official_001',
-    'redirect_uri': 'com.hyfata.app://callback',
-    'response_type': 'code',
-    'state': state,
-    'code_challenge': codeChallenge,
-    'code_challenge_method': 'S256',
-    'scope': scope,  // ← 추가
-  });
-```
-
-### 11.2 타사 앱의 Authorization 요청
-
-```dart
-// 타사 앱: 제한된 scope만 요청
-final scope = 'profile:read email';
-
-final authUrl = Uri.parse('https://api.hyfata.kr/oauth/authorize')
-  .replace(queryParameters: {
-    'client_id': 'client_third_001',
-    // ...
-    'scope': scope,
-  });
-```
-
-### 11.3 Scope 부족 시 처리
-
-API 호출 시 `403 Forbidden` + `"Insufficient scope"` 응답을 받으면, 사용자에게 "해당 기능은 공식 앱에서만 사용할 수 있습니다" 안내.
+- Authorization 요청에 `scope` 파라미터를 공백 구분으로 전달 (미입력 시 `allowedScopes` 전체 부여)
+- API 호출 시 `403 Forbidden` + `"Insufficient scope"` 응답을 받으면 해당 scope가 없는 것이므로,
+  공식 앱 이용 안내 또는 재인증(더 넓은 scope 요청)이 필요
+- Flutter 연동 상세 가이드 문서(`FLUTTER_*.md`)는 제거되었습니다. git 이력에서 복구할 수 있습니다.
 
 ---
 
 ## 12. 구현 단계별 로드맵
 
 ### Phase 1: 데이터 모델 ✅
-- [x] `Client` 엔티티에 `defaultScopes`, `allowedScopes` 추가
 - [x] `AuthorizationCode` 엔티티에 `scopes` 추가
 - [x] `UserSession` 엔티티에 `scopes` 추가
 - [x] DB 마이그레이션 파일 작성 (`V6__add_client_type.sql` 추가, scope 필드는 JPA `ddl-auto=update`로 적용)
@@ -483,50 +435,49 @@ API 호출 시 `403 Forbidden` + `"Insufficient scope"` 응답을 받으면, 사
 - [x] First-Party 클라이언트를 `application.properties` 설정으로 시드 (`FirstPartyClientInitializer`)
 - [x] `/api/clients/register` API는 Third-Party 클라이언트만 생성 가능하도록 제한
 - [x] Flutter 공식 앱에 `scope` 파라미터 추가
-- [x] `docs/auth/FLUTTER_OAUTH_GUIDE.md` 업데이트
 
-### Phase 5: Consent 화면 (선택, 향후)
-- [ ] `/oauth/authorize`에서 타사 클라이언트 로그인 시 scope 동의 화면 제공
-- [ ] 사용자가 scope를 선택적으로 체크/해제할 수 있도록 UI 제공
-- [ ] `AuthorizationCode.scopes`에 사용자가 동의한 scope만 저장
+### Phase 5: Consent 화면 ✅ (SAS 기본 consent)
+- [x] THIRD_PARTY 클라이언트는 SAS 기본 consent 화면 표시 (`requireAuthorizationConsent(true)`)
+- [x] FIRST_PARTY 클라이언트는 consent 생략 (`requireAuthorizationConsent(false)`)
+- [x] 동의 내역은 `oauth2_authorization_consent` 테이블에 저장되어 이후 생략
 
----
-
-## 13. 운영 마이그레이션 참고사항
-
-이미 운영 중인 DB가 있고, 기존 `clients` 레코드에 `defaultScopes` / `allowedScopes`가 비어 있거나 `profile:read email` 등 예전 형식으로 되어 있다면, 다음 SQL을 참고해 수동으로 보정하세요.
-
-```sql
--- 타사 클라이언트를 최소 권한으로 설정
-UPDATE clients
-SET default_scopes = 'profile email',
-    allowed_scopes = 'profile email'
-WHERE client_type = 'THIRD_PARTY'
-  AND (default_scopes IS NULL OR default_scopes = '');
-
--- 공식 클라이언트는 설정 파일(FirstPartyClientInitializer)로 시드되므로
--- 별도 수동 보정은 일반적으로 필요 없습니다.
-```
+### Phase 6: Spring Authorization Server 마이그레이션 ✅
+- [x] OAuth 프로토콜 레이어를 SAS로 교체 (authorize/token/revoke/introspect/jwks)
+- [x] JWT HS512(jjwt) → RS256(SAS, RSA 2048), `/oauth/jwks` 공개
+- [x] `JwtUtil`/`PkceUtil`/`AuthorizationCode`/수동 OAuth 서비스 제거
+- [x] scope 검증은 SAS가 `RegisteredClient.scopes`(=`allowedScopes`) 기준으로 수행
+- [x] Refresh Token 로테이션 + reuse detection (SAS 내장)
+- [x] 세션/JTI 블랙리스트는 `SessionBridgingAuthorizationService`로 유지
 
 ---
 
-## 13. 보안 고려사항
+## 13. 운영 참고사항
+
+- 이 프로젝트는 운영 전 DB 신규 생성 기준이며, 레거시 스키마 마이그레이션은 없습니다.
+- SAS 표준 테이블은 `src/main/resources/db/sas-schema.sql`이 `spring.sql.init`으로 자동 생성하고,
+  JPA 엔티티 테이블(`users`, `user_sessions`, `client_metadata`, `login_history`)은 `ddl-auto=update`가 생성합니다.
+- 클라이언트의 scope를 변경하려면: third-party는 재등록, first-party는 `application.properties`의
+  `app.first-party.clients[n].allowed-scopes` 수정 후 재시작 (시동 시 자동 동기화).
+
+---
+
+## 14. 보안 고려사항
 
 ### 13.1 Scope 탈취 방지
 - Access Token은 짧게 (15분). 탈취되어도 위험 최소화.
 - Refresh Token 갱신 시 `scope` 변경 불가. 탈취된 refresh로 권한 상승 불가.
 
 ### 13.2 하위 호환성
-- **기존 클라이언트 앱**은 `scope` 파라미터를 보내지 않음 → `defaultScopes`를 자동 적용.
-- 마이그레이션 기간 동안 기존 클라이언트의 `defaultScopes`를 관대하게 설정(예: `profile:read email`)하여 서비스 중단 없이 점진적으로 제한.
+- `scope` 파라미터를 본내지 않는 요청은 클라이언트의 `allowedScopes` **전체**가 부여됩니다 (SAS 기본 동작).
+- 제한이 필요하면 클라이언트의 `allowedScopes` 자체를 좁게 설정하세요.
 
 ### 13.3 Token Blacklist 연동
 - 민감 scope를 요구하는 엔드포인트는 반드시 `sensitive-endpoints`에 등록하여, revoked token으로의 접근을 차단.
 
 ---
 
-## 14. 관련 문서
+## 15. 관련 문서
 
 - [AUTH_API.md](AUTH_API.md) — API 스펙
-- [FLUTTER_OAUTH_GUIDE.md](FLUTTER_OAUTH_GUIDE.md) — Flutter 연동 가이드
+- [SCOPE_API_GUIDE.md](SCOPE_API_GUIDE.md) — Scope 적용 가이드
 - RFC 6749 Section 3.3 — Access Token Scope

@@ -1,6 +1,6 @@
 # OAuth 2.0 Scope API 가이드
 
-> 이 문서는 Hyfata API의 OAuth 2.0 Scope 체계를 사용하는 **클아이언트 개발자**를 위한 실무 가이드입니다.
+> 이 문서는 Hyfata API의 OAuth 2.0 Scope 체계를 사용하는 **클라이언트 개발자**를 위한 실무 가이드입니다.
 > 설계 문서는 [OAUTH_SCOPES_DESIGN.md](OAUTH_SCOPES_DESIGN.md)를 참고하세요.
 
 ---
@@ -29,7 +29,9 @@ Access Token의 JWT payload에 `scope` 클레임이 포함되어 있으며, 민�
 
 ```json
 {
+  "iss": "https://api.hyfata.kr",
   "sub": "user@example.com",
+  "email": "user@example.com",
   "client_id": "client_001",
   "scope": "profile email",
   "jti": "...",
@@ -37,6 +39,8 @@ Access Token의 JWT payload에 `scope` 클레임이 포함되어 있으며, 민�
   "exp": 1714820100
 }
 ```
+
+토큰은 **RS256**으로 서명됩니다. 서명 검증이 필요하면 `GET /oauth/jwks`의 공개키를 사용하세요.
 
 ---
 
@@ -78,8 +82,6 @@ account:manage → account:password (implicit)
 | API | 설명 |
 |-----|------|
 | `POST /api/auth/register` | 회원가입 |
-| `POST /api/auth/login` (Deprecated) | 로그인 |
-| `POST /api/auth/refresh` (Deprecated) | 토큰 갱신 |
 | `GET /api/auth/verify-email` | 이메일 인증 |
 | `POST /api/auth/request-password-reset` | 비밀번호 재설정 요청 |
 | `POST /api/auth/reset-password` | 비밀번호 재설정 |
@@ -140,10 +142,10 @@ account:manage → account:password (implicit)
 **Third-Party(타사) 클라이언트**:
 - `/api/clients/register` API를 통해 등록할 수 있습니다.
 - **일반 개발자** (`ROLE_USER`):
-  - `defaultScopes`와 `allowedScopes`는 무조건 **`profile email`**로 고정됩니다.
+  - `allowedScopes`는 무조건 **`profile email`**로 고정됩니다.
   - 요청에 다른 값을 담아도 서버가 강제로 덮어씁니다.
 - **관리자** (`ROLE_ADMIN`):
-  - `defaultScopes`와 `allowedScopes`를 자유롭게 지정할 수 있습니다.
+  - `allowedScopes`를 자유롭게 지정할 수 있습니다.
   - 단, 생성되는 클라이언트는 `clientType: THIRD_PARTY`로 강제 설정됩니다.
 
 ### 등록 요청 예시 (타사 개발자)
@@ -164,7 +166,6 @@ account:manage → account:password (implicit)
   "client": {
     "clientId": "client_001",
     "clientSecret": "secret_xyz",
-    "defaultScopes": "profile email",
     "allowedScopes": "profile email",
     "...": "..."
   }
@@ -179,7 +180,7 @@ account:manage → account:password (implicit)
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `scope` | X | 공백 또는 `+`로 구분. 미입력 시 클라이언트의 `defaultScopes` 사용 |
+| `scope` | X | 공백 또는 `+`로 구분. 미입력 시 클라이언트의 `allowedScopes` **전체** 부여 |
 
 **공식 앱 예시:**
 
@@ -205,16 +206,19 @@ GET /oauth/authorize?client_id=client_third_001
   &scope=profile+email
 ```
 
-### Scope 검증 로직
+### Scope 검증 로직 (SAS)
 
-1. 클라이언트의 `allowedScopes`를 확인
+Spring Authorization Server가 다음을 수행합니다:
+
+1. 클라이언트의 `allowedScopes`(`RegisteredClient.scopes`) 확인
 2. 요청된 `scope`가 `allowedScopes`에 포함되는지 검증
 3. 포함되지 않는 scope가 있으면 `invalid_scope` 에러 반환
+4. THIRD_PARTY 클라이언트는 consent(동의) 화면을 표시하고, 동의한 scope만 발급
 
 ```json
 {
   "error": "invalid_scope",
-  "error_description": "Requested scope 'account:manage' exceeds client's allowed scopes"
+  "error_description": "..."
 }
 ```
 
@@ -337,4 +341,3 @@ class ScopeInterceptor extends Interceptor {
 
 - [OAUTH_SCOPES_DESIGN.md](OAUTH_SCOPES_DESIGN.md) — Scope 설계 문서
 - [AUTH_API.md](AUTH_API.md) — 전체 API 레퍼런스
-- [FLUTTER_OAUTH_GUIDE.md](FLUTTER_OAUTH_GUIDE.md) — Flutter OAuth 구현 가이드
