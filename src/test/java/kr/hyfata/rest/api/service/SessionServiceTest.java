@@ -1,15 +1,16 @@
 package kr.hyfata.rest.api.service;
 
-import kr.hyfata.rest.api.auth.dto.UserSessionDTO;
-import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.auth.entity.UserSession;
-import kr.hyfata.rest.api.auth.repository.UserRepository;
-import kr.hyfata.rest.api.auth.repository.UserSessionRepository;
-import kr.hyfata.rest.api.auth.service.impl.SessionServiceImpl;
-import kr.hyfata.rest.api.common.util.DeviceDetector;
-import kr.hyfata.rest.api.common.util.GeoIpService;
-import kr.hyfata.rest.api.common.util.IpUtil;
-import kr.hyfata.rest.api.auth.service.TokenBlacklistService;
+import kr.hyfata.rest.api.session.dto.UserSessionDTO;
+import kr.hyfata.rest.api.user.User;
+import kr.hyfata.rest.api.session.entity.UserSession;
+import kr.hyfata.rest.api.user.UserRepository;
+import kr.hyfata.rest.api.session.repository.UserSessionRepository;
+import kr.hyfata.rest.api.session.AuthorizationRevoker;
+import kr.hyfata.rest.api.session.service.impl.SessionServiceImpl;
+import kr.hyfata.rest.api.infrastructure.util.DeviceDetector;
+import kr.hyfata.rest.api.infrastructure.util.GeoIpService;
+import kr.hyfata.rest.api.infrastructure.util.IpUtil;
+import kr.hyfata.rest.api.session.service.TokenBlacklistService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,9 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -52,7 +51,7 @@ class SessionServiceTest {
     private GeoIpService geoIpService;
 
     @Mock
-    private ObjectProvider<OAuth2AuthorizationService> authorizationServiceProvider;
+    private AuthorizationRevoker authorizationRevoker;
 
     @InjectMocks
     private SessionServiceImpl sessionService;

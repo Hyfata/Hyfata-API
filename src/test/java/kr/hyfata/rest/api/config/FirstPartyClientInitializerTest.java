@@ -1,10 +1,10 @@
 package kr.hyfata.rest.api.config;
 
-import kr.hyfata.rest.api.auth.entity.ClientMetadata;
-import kr.hyfata.rest.api.auth.entity.ClientType;
-import kr.hyfata.rest.api.auth.repository.ClientMetadataRepository;
-import kr.hyfata.rest.api.common.config.FirstPartyClientProperties;
-import kr.hyfata.rest.api.common.config.FirstPartyClientInitializer;
+import kr.hyfata.rest.api.client.entity.ClientMetadata;
+import kr.hyfata.rest.api.client.entity.ClientType;
+import kr.hyfata.rest.api.client.repository.ClientMetadataRepository;
+import kr.hyfata.rest.api.oauth.config.FirstPartyClientProperties;
+import kr.hyfata.rest.api.oauth.config.FirstPartyClientInitializer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

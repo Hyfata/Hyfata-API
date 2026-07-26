@@ -1,7 +1,10 @@
 package kr.hyfata.rest.api.auth.service;
 
 import jakarta.servlet.http.HttpServletRequest;
-import kr.hyfata.rest.api.auth.dto.*;
+import kr.hyfata.rest.api.auth.dto.AuthResponse;
+import kr.hyfata.rest.api.auth.dto.PasswordResetRequest;
+import kr.hyfata.rest.api.auth.dto.RegisterRequest;
+import kr.hyfata.rest.api.auth.dto.TwoFactorRequest;
 
 public interface AuthService {
     /**

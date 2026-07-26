@@ -1,8 +1,8 @@
 package kr.hyfata.rest.api.service;
 
-import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.auth.repository.UserRepository;
-import kr.hyfata.rest.api.common.service.EmailService;
+import kr.hyfata.rest.api.user.User;
+import kr.hyfata.rest.api.user.UserRepository;
+import kr.hyfata.rest.api.infrastructure.service.EmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

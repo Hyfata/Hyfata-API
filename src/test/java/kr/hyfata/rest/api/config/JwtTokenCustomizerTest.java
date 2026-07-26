@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.config;
 
-import kr.hyfata.rest.api.common.config.AuthorizationServerConfig;
+import kr.hyfata.rest.api.oauth.config.AuthorizationServerConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;

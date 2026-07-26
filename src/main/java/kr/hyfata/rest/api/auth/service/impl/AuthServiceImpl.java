@@ -1,14 +1,17 @@
 package kr.hyfata.rest.api.auth.service.impl;
 
 import jakarta.servlet.http.HttpServletRequest;
-import kr.hyfata.rest.api.auth.dto.*;
-import kr.hyfata.rest.api.auth.entity.User;
-import kr.hyfata.rest.api.auth.repository.UserRepository;
+import kr.hyfata.rest.api.auth.dto.AuthResponse;
+import kr.hyfata.rest.api.auth.dto.PasswordResetRequest;
+import kr.hyfata.rest.api.auth.dto.RegisterRequest;
+import kr.hyfata.rest.api.auth.dto.TwoFactorRequest;
 import kr.hyfata.rest.api.auth.service.AuthService;
-import kr.hyfata.rest.api.auth.service.ClientService;
-import kr.hyfata.rest.api.common.service.EmailService;
-import kr.hyfata.rest.api.auth.service.SessionService;
-import kr.hyfata.rest.api.common.util.TokenGenerator;
+import kr.hyfata.rest.api.user.User;
+import kr.hyfata.rest.api.user.UserRepository;
+import kr.hyfata.rest.api.client.service.ClientService;
+import kr.hyfata.rest.api.infrastructure.service.EmailService;
+import kr.hyfata.rest.api.session.service.SessionService;
+import kr.hyfata.rest.api.infrastructure.util.TokenGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

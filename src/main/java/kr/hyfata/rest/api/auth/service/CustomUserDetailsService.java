@@ -1,6 +1,6 @@
 package kr.hyfata.rest.api.auth.service;
 
-import kr.hyfata.rest.api.auth.repository.UserRepository;
+import kr.hyfata.rest.api.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;

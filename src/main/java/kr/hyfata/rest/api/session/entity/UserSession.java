@@ -1,0 +1,101 @@
+package kr.hyfata.rest.api.session.entity;
+
+import jakarta.persistence.*;
+import kr.hyfata.rest.api.user.User;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "user_sessions",
+        indexes = {
+                @Index(name = "idx_user_sessions_user_id", columnList = "user_id"),
+                @Index(name = "idx_user_sessions_last_active_at", columnList = "last_active_at"),
+                @Index(name = "idx_user_sessions_expires_at", columnList = "expires_at"),
+                @Index(name = "idx_user_sessions_is_revoked", columnList = "is_revoked"),
+                @Index(name = "idx_user_sessions_authorization_id", columnList = "authorization_id")
+        })
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class UserSession {
+
+    @Id
+    @Column(name = "refresh_token_hash", length = 64)
+    private String refreshTokenHash;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @Column(name = "access_token_jti", length = 64)
+    private String accessTokenJti;
+
+    @Column(name = "device_type", length = 50)
+    private String deviceType;
+
+    @Column(name = "device_name", length = 100)
+    private String deviceName;
+
+    @Column(name = "ip_address", length = 50, nullable = false)
+    private String ipAddress;
+
+    @Column(length = 100)
+    private String location;
+
+    @Column(name = "user_agent", columnDefinition = "TEXT")
+    private String userAgent;
+
+    @Column(name = "expires_at", nullable = false)
+    private LocalDateTime expiresAt;
+
+    @Column(name = "is_revoked", nullable = false)
+    @Builder.Default
+    private Boolean isRevoked = false;
+
+    @Column(name = "pkce_flow", nullable = false)
+    @Builder.Default
+    private Boolean pkceFlow = false;  // 레거시 구분값 — SAS는 모든 클라이언트에 PKCE를 강제하므로 SAS 세션은 항상 true로 기록
+
+    @Column(name = "client_id", length = 100)
+    private String clientId;  // SAS RegisteredClient의 client_id
+
+    @Column(name = "authorization_id", length = 255)
+    private String authorizationId;  // SAS OAuth2Authorization ID (세션 브리징용)
+
+    @Column(length = 500)
+    private String scopes;  // 세션에 발급된 scope 목록
+
+    @Column(name = "last_active_at", nullable = false)
+    @Builder.Default
+    private LocalDateTime lastActiveAt = LocalDateTime.now();
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    @Builder.Default
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    /**
+     * 세션이 유효한지 확인
+     */
+    public boolean isValid() {
+        return !isRevoked && expiresAt.isAfter(LocalDateTime.now());
+    }
+
+    /**
+     * 세션 활동 시간 갱신
+     */
+    public void updateActivity() {
+        this.lastActiveAt = LocalDateTime.now();
+    }
+
+    /**
+     * 세션 무효화
+     */
+    public void revoke() {
+        this.isRevoked = true;
+    }
+}

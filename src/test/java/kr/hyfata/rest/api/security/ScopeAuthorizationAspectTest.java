@@ -1,7 +1,7 @@
 package kr.hyfata.rest.api.security;
 
-import kr.hyfata.rest.api.common.security.scope.RequireScope;
-import kr.hyfata.rest.api.common.security.scope.ScopeAuthorizationAspect;
+import kr.hyfata.rest.api.infrastructure.security.scope.RequireScope;
+import kr.hyfata.rest.api.infrastructure.security.scope.ScopeAuthorizationAspect;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

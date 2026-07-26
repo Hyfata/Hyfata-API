@@ -1,13 +1,13 @@
 package kr.hyfata.rest.api.service;
 
-import kr.hyfata.rest.api.auth.dto.ClientRegistrationRequest;
-import kr.hyfata.rest.api.auth.dto.ClientResponse;
-import kr.hyfata.rest.api.auth.entity.ClientMetadata;
-import kr.hyfata.rest.api.auth.entity.ClientType;
-import kr.hyfata.rest.api.auth.repository.ClientMetadataRepository;
-import kr.hyfata.rest.api.auth.repository.UserRepository;
-import kr.hyfata.rest.api.auth.service.impl.ClientServiceImpl;
-import kr.hyfata.rest.api.common.util.TokenGenerator;
+import kr.hyfata.rest.api.client.dto.ClientRegistrationRequest;
+import kr.hyfata.rest.api.client.dto.ClientResponse;
+import kr.hyfata.rest.api.client.entity.ClientMetadata;
+import kr.hyfata.rest.api.client.entity.ClientType;
+import kr.hyfata.rest.api.client.repository.ClientMetadataRepository;
+import kr.hyfata.rest.api.user.UserRepository;
+import kr.hyfata.rest.api.client.service.impl.ClientServiceImpl;
+import kr.hyfata.rest.api.infrastructure.util.TokenGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
